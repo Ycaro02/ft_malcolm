@@ -1,0 +1,30 @@
+    # docker run --rm --name wire-shark-nmap -e DISPLAY=${DISPLAY} --privileged -v ~/.ssh/:/root/.ssh -v /tmp/.X11-unix:/tmp/.X11-unix -v ./:/app --workdir /app -d wire wireshark -k -i any --no-promiscuous-mode
+
+services:
+  ft_malcolm:
+    build: ./rsc/docker
+    container_name: wire-shark-ft_malcolm
+    volumes:
+      - ./:/app
+      - ~/.ssh/:/root/.ssh
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - DISPLAY=${DISPLAY}
+    privileged: true
+    working_dir: /app
+    # only listen arp request
+    command: wireshark -k -i any --no-promiscuous-mode -f "arp"
+    # network_mode: host
+    networks:
+      - test-net
+
+  web-server:
+    image: nginx:latest
+    restart: unless-stopped
+    # network_mode: host
+    networks:
+      - test-net
+
+
+networks:
+  test-net:
