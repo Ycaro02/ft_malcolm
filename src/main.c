@@ -187,9 +187,123 @@ void listen_arp(char *device_name) {
 }
 
 
+typedef struct StatusIff {
+    unsigned int flag;
+    char *name;
+} StatusIff;
+
+#define IFF_FLAGS_ARR (StatusIff[]) {\
+    { IFF_UP, "IFF_UP" },\
+    { IFF_BROADCAST, "IFF_BROADCAST" },\
+    { IFF_DEBUG, "IFF_DEBUG" },\
+    { IFF_LOOPBACK, "IFF_LOOPBACK" },\
+    { IFF_POINTOPOINT, "IFF_POINTOPOINT" },\
+    { IFF_NOTRAILERS, "IFF_NOTRAILERS" },\
+    { IFF_RUNNING, "IFF_RUNNING" },\
+    { IFF_NOARP, "IFF_NOARP" },\
+    { IFF_PROMISC, "IFF_PROMISC" },\
+    { IFF_ALLMULTI, "IFF_ALLMULTI" },\
+    { IFF_MASTER, "IFF_MASTER" },\
+    { IFF_SLAVE, "IFF_SLAVE" },\
+    { IFF_MULTICAST, "IFF_MULTICAST" },\
+    { IFF_PORTSEL, "IFF_PORTSEL" },\
+    { IFF_AUTOMEDIA, "IFF_AUTOMEDIA" },\
+    { IFF_DYNAMIC, "IFF_DYNAMIC" },\
+    { 0, NULL }\
+};
+
+#define MAX_FLAGS 16
+
+void display_iff_flag(u32flag) {
+    char buffer[1024] = {};
+    int idx = 0;
+
+    StatusIff iff_flag_array[] = IFF_FLAGS_ARR;
+
+    for (int i = 0; iff_flag_array[i].flag != 0; i++) {
+        if (flag & iff_flag_array[i].flag) {
+            idx += sprintf(buffer + idx, " %s", iff_flag_array[i].name);
+        }
+    }
+    INFO("FLAG: %s\n", buffer);
+}
+
+s8 is_broadcast_if(u32 flag) {
+    return (flag & IFF_BROADCAST);
+}
+
+s8 is_loopback_if(u32 flag) {
+    return (flag & IFF_LOOPBACK);
+}
+
+s8 is_up_if(u32 flag) {
+    return (flag & IFF_UP);
+}
+
+#include <ifaddrs.h>
+
+void display_ifaddrs(struct ifaddrs *ifa) {
+    
+    INFO("--------------------------------------------------------------------------------------\n");
+    
+
+    if (ifa->ifa_addr->sa_family == AF_INET) {
+        struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
+        INFO("Interface: %s, Address: %s\n", ifa->ifa_name, ip);
+        INFO("Flags: 0x%x\n", ifa->ifa_flags);
+        display_iff_flag(ifa->ifa_flags);
+        if (ifa->ifa_netmask) {
+            struct sockaddr_in *netmask = (struct sockaddr_in *)ifa->ifa_netmask;
+            char nm[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &netmask->sin_addr, nm, sizeof(nm));
+            INFO("Netmask: %s\n", nm);
+        }
+        if (ifa->ifa_broadaddr) {
+            struct sockaddr_in *broadaddr = (struct sockaddr_in *)ifa->ifa_broadaddr;
+            char ba[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &broadaddr->sin_addr, ba, sizeof(ba));
+            INFO("Broadcast Address: %s\n", ba); 
+        }
+    }
+}
+
+/**
+ *	@brief Get process ipv4 address
+ *	@return in_addr_t ipv4 address of the process
+*/
+s8 iter_ifaddr_lst()
+{
+    struct ifaddrs *ifa_head, *current;
+
+    errno = 0;
+    if (getifaddrs(&ifa_head) == -1) {
+        perror("getifaddrs");
+        return (0);
+    }
+
+    for (current = ifa_head; current != NULL; current = current->ifa_next) {
+        if (current->ifa_addr && current->ifa_addr->sa_family == AF_INET) {
+            display_ifaddrs(current);
+        }
+    }
+    INFO("--------------------------------------------------------------------------------------\n");
+    freeifaddrs(ifa_head);
+    return (1);
+}
+
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
     set_log_level(L_DEBUG);
+    
+    if (argc != 2) {
+        ERR("Usage: %s <network interface>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    iter_ifaddr_lst();
     listen_arp(argv[1]);
 }

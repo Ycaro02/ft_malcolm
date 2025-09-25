@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.def": "source.def",
+        "features.h": "c",
+        "socket.h": "c",
+        "packet.h": "c",
+        "if.h": "c",
+        "chrono": "c",
+        "text_encoding": "c",
+        "typeinfo": "c"
+    }
+}
