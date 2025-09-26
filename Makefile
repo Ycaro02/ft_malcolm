@@ -12,7 +12,7 @@ $(NAME): $(LIBFT) $(LIST) $(OBJ_DIR) $(OBJS)
 	@$(MAKE_LIST)
 	@./rsc/sh/ascii.sh $(ASCII_NAME)
 	@printf "$(CYAN)Compiling ${NAME} ...$(RESET)\n"
-	@$(CC) $(CFLAGS) -o $(NAME) $(OBJS) $(LIBFT) $(LIST) $(LIB_FLAGS)
+	@$(CC) $(CFLAGS) -o $(NAME) $(OBJS) $(LIBFT) $(LIST)
 	@printf "$(GREEN)Compiling $(NAME) done$(RESET)\n"
 
 $(LIST):
