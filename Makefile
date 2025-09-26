@@ -59,6 +59,9 @@ clean_lib:
 	@$(MAKE_LIBFT) fclean
 	@printf "$(RED)Clean libft, list$(RESET)\n"
 
+test: $(NAME)
+	./ft_malcolm 172.20.0.30 aa:aa:aa:aa:aa:aa 172.20.0.20 02:42:ac:14:00:14
+
 wire:
 	@printf "$(CYAN)Start wireshark container and attach the current terminal to it$(RESET)\n"
 	@./rsc/docker/run.sh "$(word 2,$(MAKECMDGOALS))" ; true
