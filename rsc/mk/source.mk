@@ -2,8 +2,6 @@ INCLUDE_DIR		=	-Iinclude -Ilibft
 
 CFLAGS			=	-Wall -Wextra -Werror -O3 $(INCLUDE_DIR) 
 
-LIB_FLAGS		=	-lpcap
-
 OBJ_DIR			=	obj
 
 SRC_DIR 		=	src
