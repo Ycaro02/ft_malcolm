@@ -14,17 +14,46 @@ services:
     working_dir: /app
     # only listen arp request
     command: wireshark -k -i any --no-promiscuous-mode -f "arp"
-    # network_mode: host
     networks:
-      - test-net
+      test-net:
+        ipv4_address: 172.20.0.10
+        mac_address: 02:42:ac:14:00:0a
 
-  web-server:
+  target:
+    build: ./rsc/docker
+    container_name: target
+    volumes:
+      - ./:/app
+      - ~/.ssh/:/root/.ssh
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - DISPLAY=${DISPLAY}
+    privileged: true
+    working_dir: /app
+    # Configuration sysctl pour accepter les ARP replies non-sollicitées
+    sysctls:
+      - net.ipv4.conf.all.arp_accept=1
+      - net.ipv4.conf.default.arp_accept=1
+    # only listen arp request
+    command: wireshark -k -i any --no-promiscuous-mode -f "arp"
+    networks:
+      test-net:
+        ipv4_address: 172.20.0.20
+        mac_address: 02:42:ac:14:00:14
+
+  triggers:
     image: nginx:latest
     restart: unless-stopped
-    # network_mode: host
     networks:
-      - test-net
-
+      test-net:
+        ipv4_address: 172.20.0.30
+        mac_address: 02:42:ac:14:00:1e
 
 networks:
   test-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+

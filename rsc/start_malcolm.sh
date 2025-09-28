@@ -1,20 +1,19 @@
 #!/bin/bash
 
-LOCAL_IP=$(ip a | grep eth0 | grep inet | awk '{print $2}' | cut -d '/' -f1)
 
-LOCAL_MAC=$(ip a | grep eth0 -C1 | grep 'link/ether' | awk '{print $2}')
+# LOCAL_IP=$(ip a | grep eth0 | grep inet | awk '{print $2}' | cut -d '/' -f1)
+# LOCAL_MAC=$(ip a | grep eth0 -C1 | grep 'link/ether' | awk '{print $2}')
 
 
-echo "Starting Malcolm with IP: ${LOCAL_IP} and MAC: ${LOCAL_MAC}"
+./ft_malcolm 172.18.0.4 aa:aa:aa:aa:aa:aa 172.18.0.3 02:42:ac:12:00:03
 
-TARGET_IP=${1}
-TARGET_MAC=${2}
 
-if [ -z "${TARGET_IP}" ] || [ -z "${TARGET_MAC}" ]; then
-    echo "Usage: $0 <TARGET_IP> <TARGET_MAC>"
-    exit 1
-fi
 
-echo "Command: ./ft_malcolm ${TARGET_IP} ${TARGET_MAC} ${LOCAL_IP} ${LOCAL_MAC}"
+SOURCE_IP=${1}
+SOURCE_MAC=${2}
+TARGET_IP=${3}
+TARGET_MAC=${4}
 
-./ft_malcolm ${TARGET_IP} ${TARGET_MAC} ${LOCAL_IP} ${LOCAL_MAC}
+echo "Starting Malcolm: ./ft_malcolm ${SOURCE_IP} ${SOURCE_MAC} ${TARGET_IP} ${TARGET_MAC}"
+
+./ft_malcolm ${SOURCE_IP} ${SOURCE_MAC} ${TARGET_IP} ${TARGET_MAC}

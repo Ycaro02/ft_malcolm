@@ -150,8 +150,16 @@ void dbg_display_arp_packet(const unsigned char *buffer, ssize_t len) {
 
 
 s8 is_match_request(MalcolmCtx *c, unsigned char *arp_spa, unsigned char *arp_tpa, char *s_mac) {
-    if (*(Addr *)arp_spa == c->target_ip && *(Addr *)arp_tpa == c->src_ip &&
-        ft_strcmp(s_mac, c->target_mac_str) == 0) {
+    // if (*(Addr *)arp_spa == c->target_ip && *(Addr *)arp_tpa == c->src_ip &&
+    //     ft_strcmp(s_mac, c->target_mac_str) == 0) 
+    // set_log_level(L_WARN);
+
+    char *tpa = ft_strdup(inet_ntoa(*(struct in_addr *)arp_tpa));
+    char *spa = ft_strdup(inet_ntoa(*(struct in_addr *)arp_spa));
+    WARN("Comparing ARP Request: Who has %s? Tell %s\n", tpa, spa);
+    
+    if (*(Addr *)arp_tpa == c->src_ip) {
+        WARN("Src Mac: %s, Ctx Target Mac: %s\n", s_mac, c->target_mac_str);
         return (TRUE);
     }
     return (FALSE);
@@ -182,7 +190,7 @@ void mac_addr_str_to_bytes(const char *mac_str, unsigned char *mac_bytes) {
 
 }
 
-void init_malcolm_sender(MalcolmSender *sender, const char* device_name) {
+void init_malcolm_sender(MalcolmSender *sender, const char* device_name ) {
     sender->sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (sender->sock == -1) {
         perror("socket");
@@ -203,40 +211,15 @@ void init_malcolm_sender(MalcolmSender *sender, const char* device_name) {
     sender->addr_ll.sll_protocol = htons(ETH_P_ALL);
     sender->addr_ll.sll_ifindex = ifindex;
     sender->addr_ll.sll_hatype = ARPHRD_ETHER;
-    sender->addr_ll.sll_pkttype = PACKET_HOST;
+    sender->addr_ll.sll_pkttype = PACKET_OUTGOING;
     sender->addr_ll.sll_halen = ETH_ALEN;
+    DBG("Initialized MalcolmSender on device %s\n", device_name);
 }
 
 // int send_raw_packet(const char* device_name, const void* packet, size_t packet_len, const unsigned char* mac_addr) {
 int send_raw_packet(MalcolmCtx *c) {
-    // int sock;
-    // struct sockaddr_ll socket_address;
-    // unsigned int ifindex;
-    
-    // sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-    // if (sock == -1) {
-    //     perror("socket");
-    //     return -1;
-    // }
-    // DBG("Successfully opened socket: %i\n", sock);
-    
-    // ifindex = if_nametoindex(device_name);
-    // if (ifindex == 0) {
-    //     perror("if_nametoindex");
-    //     close(sock);
-    //     return -1;
-    // }
-    // DBG("Successfully got interface index: %i\n", ifindex);
-    
-    // memset(&socket_address, 0, sizeof(socket_address));
-    // socket_address.sll_family = PF_PACKET;
-    // socket_address.sll_protocol = htons(ETH_P_ALL);
-    // socket_address.sll_ifindex = ifindex;
-    // socket_address.sll_hatype = ARPHRD_ETHER;
-    // // socket_address.sll_pkttype = PACKET_OTHERHOST;
-    // socket_address.sll_pkttype = PACKET_HOST;
-    // socket_address.sll_halen = 0;
-    // (void)mac_addr;
+
+    memcpy(c->sender.addr_ll.sll_addr, c->src_mac_real, ETH_ALEN);
 
 
     ssize_t bytes_sent = sendto(c->sender.sock, c->arp_reply_packet, c->arp_reply_packet_len, 0,
@@ -256,10 +239,15 @@ void build_packet(MalcolmCtx *c, unsigned char *buff) {
     // build response packet
     struct ethhdr eth_resp;
 
-    memcpy(eth_resp.h_source, c->target_mac_real, ETH_ALEN);
-    unsigned char mac_buff[ETH_ALEN] = {};
-    mac_addr_str_to_bytes(c->src_mac_str, mac_buff);
+    // memcpy(eth_resp.h_source, c->target_mac_real, ETH_ALEN);
+    // memcpy(eth_resp.h_source, c->src_mac_real, ETH_ALEN);
+
+    // CORRECTION: Destination = target MAC (où on veut envoyer)
+    memcpy(eth_resp.h_dest, c->target_mac_real, ETH_ALEN);
+    
+    // CORRECTION: Source = notre MAC (qui envoie le paquet)
     memcpy(eth_resp.h_source, c->src_mac_real, ETH_ALEN);
+
     eth_resp.h_proto = htons(ETH_P_ARP);
 
     struct ether_arp arp_hdr_resp;
@@ -272,13 +260,10 @@ void build_packet(MalcolmCtx *c, unsigned char *buff) {
     memcpy(arp_hdr_resp.arp_spa, &c->src_ip, 4);
     memcpy(arp_hdr_resp.arp_tpa, &c->target_ip, 4);
 
-    // memcpy(arp_hdr_resp.arp_tha, arp_hdr.arp_sha, ETH_ALEN);
     memcpy(arp_hdr_resp.arp_tha, c->target_mac_real, ETH_ALEN);
 
     memcpy(arp_hdr_resp.arp_sha, c->src_mac_real, ETH_ALEN);
 
-
-    // mac_addr_str_to_bytes(c->target_mac_str, mac_buff);
 
     INFO(YELLOW"=== ARP Reply Packet BUILD ===\n"RESET);
     // unsigned char buff[BUF_SIZE] = {};
@@ -287,8 +272,6 @@ void build_packet(MalcolmCtx *c, unsigned char *buff) {
     INFO("-----------------------------------------------------------------------------------------------\n");
     dbg_display_arp_packet(buff, sizeof(struct ethhdr) + sizeof(struct ether_arp));
     INFO("-----------------------------------------------------------------------------------------------\n");
-
-
 
 }
 

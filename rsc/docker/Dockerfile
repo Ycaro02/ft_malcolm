@@ -13,3 +13,5 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
 
 # add basic alias for git
 RUN echo 'alias add_all="git add . && git commit -m"' >> /root/.zshrc
+
+
