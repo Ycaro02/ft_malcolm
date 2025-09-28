@@ -30,7 +30,6 @@ services:
       - DISPLAY=${DISPLAY}
     privileged: true
     working_dir: /app
-    # Configuration sysctl pour accepter les ARP replies non-sollicitées
     sysctls:
       - net.ipv4.conf.all.arp_accept=1
       - net.ipv4.conf.default.arp_accept=1
