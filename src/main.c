@@ -79,15 +79,15 @@ typedef struct StatusIffAddr {
  * @return Binary value of the hexadecimal character (0-15), or 0 for invalid
  */
 u8 hex_byte_to_bin(char c) {
+
+    c = ft_tolower(c);
+
     if (c >= '0' && c <= '9') {
         return (c - '0');
     } else if (c >= 'a' && c <= 'f') {
         return (c - 'a' + 10);
-    } else if (c >= 'A' && c <= 'F') {
-        return (c - 'A' + 10);
-    } else {
-        return (0);
-    }
+   }
+   return 0;
 }
 
 
@@ -674,10 +674,139 @@ void ft_malcolm(MalcolmCtx *c) {
     listen_arp(c);
 }
 
+#include "../libft/parse_flag/parse_flag.h"
+
+typedef enum FlagOptionVal {
+    FLAG_HELP = 1U,
+    FLAG_LOG_VERBOSITY = 2U,
+} FlagOptionVal;
+
+#define FLAG_HELP_CHAR 'h'
+#define FLAG_HELP_STR "help"
+
+#define FLAG_LOG_VERBOSITY_CHAR 'v'
+#define FLAG_LOG_VERBOSITY_STR "verbosity"
+
+
+struct log_verbosity {
+    u8 level;          /* Verbosity level */
+    char *level_str;   /* Verbosity level as string */
+};
+
+typedef struct log_verbosity LogVerbosity;
+
+#define LOG_VERBOSITY_LEVELS (LogVerbosity[]){ \
+    {L_NONE, "none"}, \
+    {L_ERROR, "error"}, \
+    {L_WARN, "warn"}, \
+    {L_INFO, "info"}, \
+    {L_DEBUG, "debug"} \
+}
+
+#define NB_LOG_VERBOSITY_LEVEL (sizeof(LOG_VERBOSITY_LEVELS) / sizeof(struct log_verbosity))
+
+
+
+s8 is_correct_log_level_str(char *str) {
+    struct log_verbosity valid_levels[] = LOG_VERBOSITY_LEVELS;
+
+    char *to_lower_str = ft_strdup(str);
+
+    s32 i = 0;
+
+    while (str && str[i]) {
+        to_lower_str[i] = ft_tolower(str[i]);
+        i++;
+    }
+
+    for (s32 i = 0; i < (s32)NB_LOG_VERBOSITY_LEVEL; i++) {
+        if (ft_strcmp(to_lower_str, valid_levels[i].level_str) == 0) {
+            set_log_level(valid_levels[i].level);
+            free(to_lower_str);
+            INFO("Log level set to %s\n", valid_levels[i].level_str);
+            return (TRUE);
+        }
+    }
+    free(to_lower_str);
+    ERR("Invalid log level: %s\n", str);
+    return (FALSE);
+}
+
+s8 parse_log_verbosity(void *opt_ptr, void *data) {
+    (void)opt_ptr;
+    char *str = data;
+    s32 str_len = 0;
+
+    DBG("Parsing log verbosity -> [%s]\n", str);
+
+    if (!str) { goto error_case; }
+    str_len = ft_strlen(str);
+    if (str_len == 0) { goto error_case; }
+
+    if (str_len == 1) {
+        if (str[0] < '1' || str[0] > '4') {
+            ERR("Invalid log level: %s\n", str);
+            goto error_case;
+        }
+        u8 level = (u8)(str[0] - '0');
+        set_log_level(level);
+        INFO("Log level set to %s\n", LOG_VERBOSITY_LEVELS[level].level_str);
+        return (TRUE);
+    }
+
+    return (is_correct_log_level_str(str));
+
+    error_case:
+        return (FALSE);
+
+}
+
+u32 init_flag_options(int argc, char **argv) {
+    FlagContext *flag_c = flag_context_init(argv);
+    if (!flag_c) {
+        ERR("Memory allocation error\n");
+        exit(EXIT_FAILURE);
+    }
+
+    add_flag_option(flag_c, FLAG_HELP_STR, FLAG_HELP, FLAG_HELP_CHAR);
+
+    /*  Init verbose log option */
+    add_flag_option(flag_c, FLAG_LOG_VERBOSITY_STR, FLAG_LOG_VERBOSITY, FLAG_LOG_VERBOSITY_CHAR);
+    set_flag_option(flag_c, FLAG_LOG_VERBOSITY, EOPT_VALUE_TYPE, CUSTOM_VALUE);
+    set_flag_option(flag_c, FLAG_LOG_VERBOSITY, EOPT_MIN_VAL, 1);
+    set_flag_option(flag_c, FLAG_LOG_VERBOSITY, EOPT_MAX_VAL, 6);
+    set_flag_option(flag_c, FLAG_LOG_VERBOSITY, EOPT_PARSE_FUNC, parse_log_verbosity);
+    set_flag_option(flag_c, FLAG_LOG_VERBOSITY, EOPT_MULTIPLE_VAL, VALUE_NO_OVERRID);
+
+
+    s8 error = 0;
+    u32 flag = parse_flag(argc, argv, flag_c, &error);
+    if (error == -1) {
+        ERR("Error parsing flags\n");
+        free(flag_c);
+        exit(EXIT_FAILURE);
+    }
+
+    DBG("DEBUG Msg\n");
+    INFO("INFO Msg\n");
+    WARN("WARN Msg\n");
+    ERR("ERR Msg\n");
+
+    display_option_list(*flag_c);
+    
+    return (flag);
+}
+
 int main(int argc, char **argv) {
     MalcolmCtx ctx = {0};
 
     set_log_level(L_DEBUG);
+
+    #ifdef MALCOLM_BONUS
+        INFO(GREEN"*** BONUS MODE ENABLED ***\n"RESET);
+        u32 flags = init_flag_options(argc, argv);
+    #endif
+
 
     if (argc != 5) {
         ERR("Usage: %s <source ip> <source mac> <target ip> <target mac>\n", argv[0]);
