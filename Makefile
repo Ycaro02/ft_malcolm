@@ -62,6 +62,10 @@ clean_lib:
 test: $(NAME)
 	./ft_malcolm 10.12.255.255 aa:bb:cc:dd:ee:ff 10.12.10.22 10:12:10:22:aa:bb
 
+complete_test:
+	@printf "$(CYAN)Starting complete test...$(RESET)\n"
+	@./rsc/tester/complete_test.sh
+
 wire:
 	@printf "$(CYAN)Start wireshark container and attach the current terminal to it$(RESET)\n"
 	@./rsc/docker/run.sh "$(word 2,$(MAKECMDGOALS))" ; true
