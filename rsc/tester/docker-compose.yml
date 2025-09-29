@@ -2,7 +2,6 @@
 services:
   ft_malcolm:
     build: ${ROOT_DIR}/rsc/docker
-    container_name: ft_malcolm
     volumes:
       - ${ROOT_DIR:?error}:/app
     privileged: true
@@ -15,7 +14,6 @@ services:
 
   target:
     build: ${ROOT_DIR}/rsc/docker
-    container_name: target
     volumes:
       - ${ROOT_DIR:?error}:/app
     working_dir: /app
@@ -31,7 +29,6 @@ services:
 
   poisoned:
     image: nginx:latest
-    container_name: poisoned
     restart: unless-stopped
     networks:
       test-net:
@@ -40,7 +37,6 @@ services:
 
   trigger:
     build: ${ROOT_DIR}/rsc/docker
-    container_name: trigger
     command: sleep infinity
     networks:
       test-net:

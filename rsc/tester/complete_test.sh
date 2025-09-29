@@ -22,5 +22,7 @@ else
     log E ${RED}"ARP request NOT received by target.\n"${RESET}
 fi
 
+
 log I "Down the test stack...\n"
+docker compose -f rsc/tester/docker-compose.yml exec -it target make fclean > /dev/null 2>&1
 docker compose -f rsc/tester/docker-compose.yml down -v
