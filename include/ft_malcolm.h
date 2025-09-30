@@ -121,4 +121,17 @@ s8      is_ipv4_addr(char *dest_str, Addr *dest_addr);
 /* network_interface.c */
 s8      get_interface_name(char *interface_name);
 
+
+/* arp_reply.c */
+void    init_malcolm_sender(MalcolmSender *sender, const char* interface_name );
+void    build_packet(MalcolmCtx *c, unsigned char *buff);
+s8      send_raw_packet(MalcolmCtx *c);
+
+/* listen_arp_request_request.c */
+void    dbg_display_arp_packet(const unsigned char *buffer, ssize_t len);
+void    listen_arp_request(MalcolmCtx *c);
+
+/* init_malcolm.c */
+void    init_malcolm(MalcolmCtx *c, int argc, char **argv);
+
 #endif /* FT_MALCOLM_H */

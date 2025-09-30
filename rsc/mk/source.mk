@@ -12,6 +12,9 @@ SRCS			=	log/log.c\
 					mac_addr.c\
 					ipv4_addr.c\
 					network_interface.c\
+					arp_reply.c\
+					listen_arp_request.c\
+					init_malcolm.c\
 
 MAKE_LIBFT		=	make -s -C libft -j
 
