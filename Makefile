@@ -59,12 +59,23 @@ clean_lib:
 	@$(MAKE_LIBFT) fclean
 	@printf "$(RED)Clean libft, list$(RESET)\n"
 
+vtest: $(NAME)
+	valgrind --leak-check=full --show-leak-kinds=all ./ft_malcolm 10.12.255.255 aa:bb:cc:dd:ee:ff 10.12.10.22 10:12:10:22:aa:bb
+
+
 test: $(NAME)
 	./ft_malcolm 10.12.255.255 aa:bb:cc:dd:ee:ff 10.12.10.22 10:12:10:22:aa:bb
+
+btest: $(NAME)
+	./ft_malcolm poisoned aa:bb:cc:dd:ee:ff target 10:12:10:22:aa:bb
 
 complete_test: $(NAME)
 	@printf "$(CYAN)Starting complete test...$(RESET)\n"
 	@./rsc/tester/complete_test.sh
+
+bonus_complete_test: bonus
+	@printf "$(CYAN)Starting complete bonus test...$(RESET)\n"
+	@./rsc/tester/complete_test.sh btest
 
 wire:
 	@printf "$(CYAN)Start wireshark container and attach the current terminal to it$(RESET)\n"

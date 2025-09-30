@@ -6,7 +6,7 @@ services:
       - ${ROOT_DIR:?error}:/app
     privileged: true
     working_dir: /app
-    command: make test
+    command: make ${MAKEFILE_RULE:?error}
     networks:
       test-net:
         ipv4_address: 10.12.10.10

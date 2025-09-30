@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ./rsc/sh/color.sh
+source ./rsc/sh/bash_log.sh
 
 function print_color_line {
     local color=${1}

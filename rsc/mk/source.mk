@@ -27,6 +27,7 @@ ifeq ($(findstring bonus, $(MAKECMDGOALS)), bonus)
 ASCII_NAME	= "bonus"
 SRCS += $(MAIN_MANDATORY)
 SRCS += $(SRCS_BONUS)
+CFLAGS += -DMALCOLM_BONUS
 else
 ASCII_NAME	= "mandatory"
 SRCS += $(MAIN_MANDATORY)

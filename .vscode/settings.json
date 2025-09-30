@@ -10,6 +10,9 @@
         "typeinfo": "c",
         "netdb.h": "c",
         "cstddef": "c",
-        "random": "c"
+        "random": "c",
+        "cstdlib": "c",
+        "signal.h": "c",
+        "libft.h": "c"
     }
 }
