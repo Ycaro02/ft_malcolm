@@ -8,7 +8,10 @@ SRC_DIR 		=	src
 
 MAIN_MANDATORY 	=	main.c
 
-SRCS			=	log/log.c
+SRCS			=	log/log.c\
+					mac_addr.c\
+					ipv4_addr.c\
+					network_interface.c\
 
 MAKE_LIBFT		=	make -s -C libft -j
 

@@ -1,122 +1,7 @@
-#include "../libft/libft.h"
+#include "../include/ft_malcolm.h"
 
-#include <sys/socket.h>         /* socket */
-#include <arpa/inet.h>          /* inet_ntoa ... */
-#include <net/if.h>             /* if_nametoindex ... */
-#include <netinet/if_ether.h>   /* struct ethhdr, ether_arp ... */
-#include <netpacket/packet.h>   /* struct sockaddr_ll ... */
-#include <netdb.h>              /* struct addrinfo ... */
-#include <ifaddrs.h>            /* getifaddrs ... */
-#include <signal.h>             /* signal handling ... */
-
-int g_signal_received = 0;
-
-/* Type definitions */
-typedef in_addr_t           Addr;
-typedef struct in_addr      InAddr;
-typedef struct addrinfo     AddrInfo;
-typedef struct sockaddr     SockAddr;
-typedef struct sockaddr_in  Sockaddr_in;
-typedef struct sockaddr_ll  Sockaddr_ll;
-typedef struct ifaddrs     IfAddrs;
-typedef struct ethhdr       EthHdr;
-typedef struct ether_arp    EtherArp;
-
-/* Buffer sizes for various operations */
-#define BUFF_SIZE 1024
-
-/* ARP reply packet size */
-#define ARP_REPLY_SIZE (sizeof(EthHdr) + sizeof(EtherArp))
-
-typedef struct MalcolmSender {
-    int         sock;                                       /* Raw socket (sending) */
-    Sockaddr_ll addr_ll;                                    /* Link-layer socket address */
-} MalcolmSender;
-
-/* Main context structure */
-typedef struct MalcolmCtx {
-    MalcolmSender   sender;                                 /* Sender structure */
-    int             sock;                                   /* Raw socket (listening) */
-    Addr            src_ip;                                 /* Source IP address */
-    u8              src_mac[ETH_ALEN];                      /* Source MAC address */
-    Addr            target_ip;                              /* Target IP address */
-    u8              target_mac[ETH_ALEN];                   /* Target MAC address */
-    u8              arp_reply_packet[ARP_REPLY_SIZE];       /* ARP reply packet */
-} MalcolmCtx;
-
-/* Structure to map interface flags to their names */
-typedef struct StatusIffAddr {
-    u32     flag;
-    char    *name;
-} StatusIffAddr;
-
-/* Array of interface flags and their names */
-#define IFF_FLAGS_ARR (StatusIffAddr[]) {\
-    { IFF_UP, "IFF_UP" },\
-    { IFF_BROADCAST, "IFF_BROADCAST" },\
-    { IFF_DEBUG, "IFF_DEBUG" },\
-    { IFF_LOOPBACK, "IFF_LOOPBACK" },\
-    { IFF_POINTOPOINT, "IFF_POINTOPOINT" },\
-    { IFF_NOTRAILERS, "IFF_NOTRAILERS" },\
-    { IFF_RUNNING, "IFF_RUNNING" },\
-    { IFF_NOARP, "IFF_NOARP" },\
-    { IFF_PROMISC, "IFF_PROMISC" },\
-    { IFF_ALLMULTI, "IFF_ALLMULTI" },\
-    { IFF_MASTER, "IFF_MASTER" },\
-    { IFF_SLAVE, "IFF_SLAVE" },\
-    { IFF_MULTICAST, "IFF_MULTICAST" },\
-    { IFF_PORTSEL, "IFF_PORTSEL" },\
-    { IFF_AUTOMEDIA, "IFF_AUTOMEDIA" },\
-    { IFF_DYNAMIC, "IFF_DYNAMIC" },\
-    { 0, NULL }\
-};
-
-
-/**
- * @brief Convert a single hexadecimal character to its binary value
- * @param c Hexadecimal character (0-9, a-f, A-F)
- * @return Binary value of the hexadecimal character (0-15), or 0 for invalid
- */
-u8 hex_byte_to_bin(char c) {
-
-    c = ft_tolower(c);
-
-    if (c >= '0' && c <= '9') {
-        return (c - '0');
-    } else if (c >= 'a' && c <= 'f') {
-        return (c - 'a' + 10);
-   }
-   return 0;
-}
-
-
-/**
- * @brief Convert a MAC address string to a byte array
- * @param mac_str MAC address string in the format "xx:xx:xx:xx:xx:xx"
- * @param mac_bytes Output byte array to store the converted MAC address
- */
-void mac_addr_str_to_bytes(const char *mac_str, unsigned char *mac_bytes) {
-    for (int i = 0; i < 6; i++) {
-        u8 byte = hex_byte_to_bin(mac_str[i * 3]);
-        mac_bytes[i] = (byte << 4) | hex_byte_to_bin(mac_str[i * 3 + 1]);
-    }
-
-    DBG("Converted MAC string %s\n", mac_str);
-    DBG(" to bytes %02x:%02x:%02x:%02x:%02x:%02x\n",
-         mac_bytes[0], mac_bytes[1], mac_bytes[2],
-         mac_bytes[3], mac_bytes[4], mac_bytes[5]);
-}
-
-/**
- * @brief Convert a MAC address from byte array to string format
- * @param mac Pointer to the MAC address byte array
- * @param buf Pointer to the buffer where the string representation will be stored
- */
-void mac_addr_byte_to_str(unsigned char *mac, char *buf) {
-    sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
-            mac[0], mac[1], mac[2],
-            mac[3], mac[4], mac[5]);
-}
+/* Global variable to handle signal interruptions */
+int  g_signal_received = 0;
 
 /**
  * @brief Debug function to display ARP packet details
@@ -379,258 +264,14 @@ void listen_arp(MalcolmCtx *c) {
     }
 }
 
-/**
- * @brief Display interface flags in a human-readable format
- * @param flag Interface flags
- */
-void display_iff_flag(u32 flag) {
-    char buffer[1024] = {};
-    int idx = 0;
 
-    StatusIffAddr iff_flag_array[] = IFF_FLAGS_ARR;
-
-    for (int i = 0; iff_flag_array[i].flag != 0; i++) {
-        if (flag & iff_flag_array[i].flag) {
-            idx += sprintf(buffer + idx, " %s", iff_flag_array[i].name);
-        }
-    }
-    DBG("FLAG: %s\n", buffer);
-}
-
-
-/**
- * @brief Check if the interface is a broadcast interface
- * @param flag Interface flags
- * @return s8 TRUE if the interface is a broadcast, FALSE otherwise
- */
-s8 is_broadcast_if(u32 flag) {
-    return (flag & IFF_BROADCAST);
-}
-
-/**
- * @brief Check if the interface is a loopback interface
- * @param flag Interface flags
- * @return s8 TRUE if the interface is a loopback, FALSE otherwise
- */
-s8 is_loopback_if(u32 flag) {
-    return (flag & IFF_LOOPBACK);
-}
-
-/**
- * @brief Check if the interface is up
- * @param flag Interface flags
- * @return s8 TRUE if the interface is up, FALSE otherwise
- */
-s8 is_up_if(u32 flag) {
-    return (flag & IFF_UP);
-}
-
-/**
- * @brief Debug function to display interface information
- * @param ifa Pointer to the IfAddrs structure containing interface information
- */
-void display_ifaddrs(IfAddrs *ifa) {
-    
-    DBG("--------------------------------------------------------------------------------------\n");
-
-    if (ifa->ifa_addr->sa_family == AF_INET) {
-        Sockaddr_in *addr = (Sockaddr_in *)ifa->ifa_addr;
-        char ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
-        DBG("Interface: %s, Address: %s\n", ifa->ifa_name, ip);
-        DBG("Flags: 0x%x\n", ifa->ifa_flags);
-        display_iff_flag(ifa->ifa_flags);
-        if (ifa->ifa_netmask) {
-            Sockaddr_in *netmask = (Sockaddr_in *)ifa->ifa_netmask;
-            char nm[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &netmask->sin_addr, nm, sizeof(nm));
-            DBG("Netmask: %s\n", nm);
-        }
-        if (ifa->ifa_broadaddr) {
-            Sockaddr_in *broadaddr = (Sockaddr_in *)ifa->ifa_broadaddr;
-            char ba[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &broadaddr->sin_addr, ba, sizeof(ba));
-            DBG("Broadcast Address: %s\n", ba); 
-        }
-    }
-}
-
-/**
- *	@brief Get process ipv4 address
- *	@return in_addr_t ipv4 address of the process
-*/
-s8 get_interface_name(char *interface_name) {
-    IfAddrs *ifa_head, *current;
-
-    errno = 0;
-    if (getifaddrs(&ifa_head) == -1) {
-        perror("getifaddrs");
-        return (0);
-    }
-
-    for (current = ifa_head; current != NULL; current = current->ifa_next) {
-        if (current->ifa_addr && current->ifa_addr->sa_family == AF_INET) {
-            display_ifaddrs(current);
-            if (is_up_if(current->ifa_flags) && is_broadcast_if(current->ifa_flags) && !is_loopback_if(current->ifa_flags)) {
-                INFO("Listening on interface: %s\n", current->ifa_name);
-                ft_strlcpy(interface_name, current->ifa_name, ft_strlen(current->ifa_name) + 1);
-                break;
-            }
-        }
-    }
-    DBG("--------------------------------------------------------------------------------------\n");
-    freeifaddrs(ifa_head);
-    return (1);
-}
-
-
-/* Ip address string format to bin format */
-Addr ipv4_str_toaddr(char *str) {
-    InAddr addr;
-
-    /* Convert presentation format to binary network format */
-    if (inet_pton(AF_INET, str, &addr) <= 0) {
-        return (0);
-    }
-    return (addr.s_addr);
-}
-
-/**
- *	@brief Get ipv4 address from hostname
- *	@param hostname hostname to convert
- *	@return ipv4 address
-*/
-Addr hostname_to_ipv4_addr(char *hostname) {
-    AddrInfo hints = {0};
-    AddrInfo *result = NULL;
-    Sockaddr_in *sockaddr_ipv4;
-    Addr addr = 0;
-
-    /* Initialize hints structure */
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-
-    /* Resolve hostname to IP address */
-    int status = getaddrinfo(hostname, NULL, &hints, &result);
-    if (status != 0) {
-        WARN("getaddrinfo error for %s: %s\n", hostname, gai_strerror(status));
-        return (0);
-    }
-
-    /* Extract IPv4 address from first result */
-    if (result && result->ai_family == AF_INET) {
-        sockaddr_ipv4 = (Sockaddr_in *)result->ai_addr;
-        addr = sockaddr_ipv4->sin_addr.s_addr;
-    }
-
-    /* Free the allocated memory */
-    freeaddrinfo(result);
-    return (addr);
-}
-
-/**
- *	@Brief get destination address
- *	@param dest_str destination address string (ipv4 or hostname) [input]
- *	@param dest_addr pointer on destination address [output]
-*/
-s8 is_ipv4_addr(char *dest_str, Addr *dest_addr) {
-	/* get ipv4 address of destination addr */
-	*dest_addr = ipv4_str_toaddr(dest_str);
-    #ifdef MALCOLM_BONUS
-        if (*dest_addr == 0) {
-            *dest_addr = hostname_to_ipv4_addr(dest_str);
-            if (*dest_addr == 0) {
-                WARN( "'%s' Name or service not known\n", dest_str);
-                return (FALSE);
-            }
-        }
-    #else
-        if (*dest_addr == 0) {
-            WARN( "'%s' Invalid IP address format\n", dest_str);
-            return (FALSE);
-        }
-    #endif
-	return (TRUE);
-}
-
-/**
- * @brief Check if a character is a valid hexadecimal character
- * @param c Character to check
- * @return s8 TRUE if the character is hexadecimal, FALSE otherwise
- */
-s8 is_hexa_char(char c) {
-    return ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
-}
-
-/**
- * @brief Validate if a string is a valid MAC address
- * @param mac MAC address string to validate
- * @return s8 TRUE if the MAC address is valid, FALSE otherwise
- */
-s8 is_mac_addr(char *mac) {
-
-    int count_colon = count_char(mac, ':');
-
-    if (count_colon != 5) {
-        DBG("MAC address must have 5 colons\n");
-        return (FALSE);
-    }
-
-    char **splited = ft_split((char *)mac, ':');
-    if (!splited)
-        return (FALSE);
-
-    if (double_char_size(splited) != 6) {
-        DBG("MAC address must have 6 octets\n");
-        free_double_char(splited);
-        return (FALSE);
-    }
-
-    for (int i = 0; i < 6; i++) {
-        if (ft_strlen(splited[i]) != 2) {
-            DBG("MAC address octet %d must be 2 characters\n", i + 1);
-            free_double_char(splited);
-            return (FALSE);
-        }
-        if (!is_hexa_char(splited[i][0]) || !is_hexa_char(splited[i][1])) {
-            DBG("MAC address octet %d must be hexadecimal\n", i + 1);
-            free_double_char(splited);
-            return (FALSE);
-        }
-    }
-    free_double_char(splited);
-    return (TRUE);
-}
-
-/**
- * @brief Test function for is_mac_addr
- */
-void test_mac_addr_func() {
-
-    char *valid_mac = "01:23:45:67:89:ab";
-    char *invalid_mac1 = "01:23:45:67:89";        // Too few octets
-    char *invalid_mac2 = "01:23:45:67:89:gh";     // Invalid hex character
-    char *invalid_mac3 = "01:23:45:67:89:ab:cd";  // Too many octets
-    char *invalid_mac4 = "01-23-45-67-89-ab";     // Wrong delimiter
-    char *invalid_mac5 = "0123:45:67:89:ab";    // Octet too long
-    char *invalid_mac6 = "01:2:45:67:89:ab";     // Octet too short
-
-    INFO("Testing valid MAC address '%s': %s\n", valid_mac, is_mac_addr(valid_mac) ? GREEN"Valid"RESET : RED"Invalid"RESET);
-    INFO("Testing invalid MAC address '%s': %s\n", invalid_mac1, is_mac_addr(invalid_mac1) ? GREEN"Valid"RESET : RED"Invalid"RESET);
-    INFO("Testing invalid MAC address '%s': %s\n", invalid_mac2, is_mac_addr(invalid_mac2) ? GREEN"Valid"RESET : RED"Invalid"RESET);
-    INFO("Testing invalid MAC address '%s': %s\n", invalid_mac3, is_mac_addr(invalid_mac3) ? GREEN"Valid"RESET : RED"Invalid"RESET);
-    INFO("Testing invalid MAC address '%s': %s\n", invalid_mac4, is_mac_addr(invalid_mac4) ? GREEN"Valid"RESET : RED"Invalid"RESET);
-    INFO("Testing invalid MAC address '%s': %s\n", invalid_mac5, is_mac_addr(invalid_mac5) ? GREEN"Valid"RESET : RED"Invalid"RESET);
-    INFO("Testing invalid MAC address '%s': %s\n", invalid_mac6, is_mac_addr(invalid_mac6) ? GREEN"Valid"RESET : RED"Invalid"RESET);
-
-}
 
 /**
  * @brief Parse command-line input arguments and populate the MalcolmCtx structure
  * @param c Pointer to the MalcolmCtx structure to populate
- * @param argv Command-line arguments
+ * @param cli_args Linked list of command-line arguments
+ * @return s8 TRUE on success, FALSE on failure
  */
-// s8 parse_input(MalcolmCtx *c, char **argv) {
 s8 parse_input(MalcolmCtx *c, List *cli_args) {
     void *dst = NULL;
     
@@ -694,92 +335,7 @@ void ft_malcolm(MalcolmCtx *c) {
     listen_arp(c);
 }
 
-#include "../libft/parse_flag/parse_flag.h"
 
-typedef enum FlagOptionVal {
-    FLAG_HELP = 1U,
-    FLAG_LOG_VERBOSITY = 2U,
-} FlagOptionVal;
-
-#define FLAG_HELP_CHAR 'h'
-#define FLAG_HELP_STR "help"
-
-#define FLAG_LOG_VERBOSITY_CHAR 'v'
-#define FLAG_LOG_VERBOSITY_STR "verbosity"
-
-
-struct log_verbosity {
-    u8      level;          /* Verbosity level */
-    char    *level_str;     /* Verbosity level as string */
-};
-
-typedef struct log_verbosity LogVerbosity;
-
-#define LOG_VERBOSITY_LEVELS (LogVerbosity[]){ \
-    {L_NONE, "none"}, \
-    {L_ERROR, "error"}, \
-    {L_WARN, "warn"}, \
-    {L_INFO, "info"}, \
-    {L_DEBUG, "debug"} \
-}
-
-#define NB_LOG_VERBOSITY_LEVEL (sizeof(LOG_VERBOSITY_LEVELS) / sizeof(struct log_verbosity))
-
-
-
-s8 is_correct_log_level_str(char *str) {
-    struct log_verbosity valid_levels[] = LOG_VERBOSITY_LEVELS;
-
-    char *to_lower_str = ft_strdup(str);
-
-    s32 i = 0;
-
-    while (str && str[i]) {
-        to_lower_str[i] = ft_tolower(str[i]);
-        i++;
-    }
-
-    for (s32 i = 0; i < (s32)NB_LOG_VERBOSITY_LEVEL; i++) {
-        if (ft_strcmp(to_lower_str, valid_levels[i].level_str) == 0) {
-            set_log_level(valid_levels[i].level);
-            free(to_lower_str);
-            INFO("Log level set to %s\n", valid_levels[i].level_str);
-            return (TRUE);
-        }
-    }
-    free(to_lower_str);
-    ERR("Invalid log level: %s\n", str);
-    return (FALSE);
-}
-
-s8 parse_log_verbosity(void *opt_ptr, void *data) {
-    (void)opt_ptr;
-    char *str = data;
-    s32 str_len = 0;
-
-    DBG("Parsing log verbosity -> [%s]\n", str);
-
-    if (!str) { goto error_case; }
-    str_len = ft_strlen(str);
-    if (str_len == 0) { goto error_case; }
-
-    if (str_len == 1) {
-        if (str[0] < '1' || str[0] > '4') {
-            ERR("Invalid log level: %s\n", str);
-            goto error_case;
-        }
-        u8 level = (u8)(str[0] - '0');
-        set_log_level(level);
-        INFO("Log level set to %s\n", LOG_VERBOSITY_LEVELS[level].level_str);
-        return (TRUE);
-    }
-
-    return (is_correct_log_level_str(str));
-
-    error_case:
-        return (FALSE);
-
-}
 
 u32 init_flag_options(int argc, char **argv, s8 *error_flag) {
     FlagContext *flag_c = flag_context_init(argv);
@@ -814,24 +370,6 @@ u32 init_flag_options(int argc, char **argv, s8 *error_flag) {
     return (flag);
 }
 
-
-#ifdef MALCOLM_BONUS
-    void usage(char *prog_name) {
-        printf("Usage: %s [options] <src_ip> <src_mac> <target_ip> <target_mac>\n", prog_name);
-        printf("Options:\n");
-        printf("  -h, --help               Show this help message and exit\n");
-        printf("  -v, --verbosity <level>  Set log verbosity level (1-4 or none, error, warn, info, debug)\n");
-        exit(EXIT_SUCCESS);
-    }
-#else
-    void usage(char *prog_name) {
-        printf("Usage: %s <src_ip> <src_mac> <target_ip> <target_mac>\n", prog_name);
-        exit(EXIT_SUCCESS);
-    }
-#endif
-
-
-
 void handle_sigint(int sig) {
     (void)sig;
     INFO("Caught SIGINT, exiting...\n");
@@ -844,14 +382,16 @@ void init_signal_handling(void) {
     sigaction(SIGINT, &sa, NULL);
 }
 
-int main(int argc, char **argv) {
-    
+void usage() {
+    printf("%s", MALCOLM_USAGE_STR);
+    exit(EXIT_SUCCESS);
+}
+
+void init_malcolm(MalcolmCtx *c, int argc, char **argv) {
+
+    List *cli_args = NULL;
+
     init_signal_handling();
-
-    MalcolmCtx ctx = {0};
-
-
-    set_log_level(L_INFO);
 
     #ifdef MALCOLM_BONUS
         INFO(GREEN"*** BONUS MODE ENABLED ***\n"RESET);
@@ -859,32 +399,37 @@ int main(int argc, char **argv) {
         u32 flags = init_flag_options(argc, argv, &error_flag);
         if (error_flag == -1) {
             exit(EXIT_FAILURE);
-        }
-        if (has_flag(flags, FLAG_HELP)) {
-            usage(argv[0]);
+        } else if (has_flag(flags, FLAG_HELP)) {
+            usage();
         }
     #endif
-  
-    List *cli_args = extract_args(argc, argv);
+
+    cli_args = extract_args(argc, argv);
     if (!cli_args) {
         ERR("Failed to extract command line arguments\n");
         exit(EXIT_FAILURE);
     } else if (ft_lstsize(cli_args) != 4) {
         ERR("Invalid number of mandatory arguments. Expected 4, got %d\n", ft_lstsize(cli_args));
         ft_lstclear(&cli_args, free);
-        usage(argv[0]);
-    }
-
-    if (!parse_input(&ctx, cli_args)) {
+        usage();
+    } else if (!parse_input(c, cli_args)) {
         ERR("Failed to parse input arguments exit\n");
         ft_lstclear(&cli_args, free);
         exit(EXIT_FAILURE);
     }
 
     ft_lstclear(&cli_args, free);
-    display_ctx(&ctx);
+    display_ctx(c);
+}
+
+int main(int argc, char **argv) {
+    
+    MalcolmCtx ctx = {0};
+    
+    set_log_level(L_INFO);
 
 
+    init_malcolm(&ctx, argc, argv);
     ft_malcolm(&ctx);
 
     return (0);

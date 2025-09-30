@@ -13,15 +13,40 @@ typedef enum {
 	L_DEBUG			/* Debug log */
 } LogLevel;
 
+/* Log Verbosity structure */
+struct log_verbosity {
+    u8      level;          /* Verbosity level */
+    char    *level_str;     /* Verbosity level as string */
+};
+
+/* Typedef for LogVerbosity structure */
+typedef struct log_verbosity LogVerbosity;
+
+/* Define log verbosity levels array */
+#define LOG_VERBOSITY_LEVELS (LogVerbosity[]){ \
+    {L_NONE, "none"}, \
+    {L_ERROR, "error"}, \
+    {L_WARN, "warn"}, \
+    {L_INFO, "info"}, \
+    {L_DEBUG, "debug"} \
+}
+
+#define NB_LOG_VERBOSITY_LEVEL (sizeof(LOG_VERBOSITY_LEVELS) / sizeof(struct log_verbosity))
+
+
+
 /*----------------------------------------------------------------------------------*/
 /*								src/log.c											*/
 /*----------------------------------------------------------------------------------*/
 
 /* Get the log level */
-u8 *get_log_level();
+u8      *get_log_level();
 
 /* Set the log level */
-void set_log_level(u8 level);
+void    set_log_level(u8 level);
+
+/* Check if the log level string is correct and set the log level (used in set_flag_option) */
+s8      parse_log_verbosity(void *opt_ptr, void *data);
 
 /* Log message */
 #define LOG_MESSAGE(_color_, _level_, _format_str_, ...) do { \
