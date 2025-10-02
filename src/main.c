@@ -13,9 +13,13 @@ void ft_malcolm(MalcolmCtx *c) {
     }
 
     INFO("Using interface: %s\n", interface_name);
-    build_packet(c, c->arp_reply_packet);
     init_malcolm_sender(&c->sender, interface_name);
 
+    if (has_flag(c->flags, FLAG_MITM)) {
+        INFO("Starting MITM attack...\n");
+        mitm_attack(c);
+        return;
+    }
     listen_arp_request(c);
 }
 

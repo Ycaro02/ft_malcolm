@@ -77,6 +77,14 @@ bonus_complete_test: bonus
 	@printf "$(CYAN)Starting complete bonus test...$(RESET)\n"
 	@./rsc/tester/complete_test.sh btest
 
+bonus_mitm: bonus
+	@printf "$(CYAN)Starting MITM attack test...$(RESET)\n"
+	./ft_malcolm -m 10.12.12.7 10:12:12:07:07:07 10.12.10.22 10:12:10:22:aa:bb
+
+mitm_test:
+	@printf "$(CYAN)Starting MITM test...$(RESET)\n"
+	@./rsc/tester/MITM_test.sh
+
 sleep:
 	@printf "$(CYAN)Starting MITM test...$(RESET)\n"
 	@sleep infinity

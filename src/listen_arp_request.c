@@ -103,6 +103,7 @@ static void process_arp_request(MalcolmCtx *c, const unsigned char *buffer, ssiz
     if (ntohs(arp_hdr.ea_hdr.ar_op) == ARPOP_REQUEST) {
         if (is_match_request(c, arp_hdr.arp_spa, arp_hdr.arp_tpa)) {
             DBG(GREEN"*** Matched ARP packet ***\n\n"RESET);
+            build_packet(c->arp_reply_packet, c->src_ip, c->src_mac, c->target_ip, c->target_mac);
             DBG(YELLOW"=== SENDING ARP Reply Packet ===\n"RESET);
             if  (!send_raw_packet(c)) {
                 ERR("Failed to send ARP reply packet\n");

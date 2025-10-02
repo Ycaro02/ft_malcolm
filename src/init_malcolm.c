@@ -28,6 +28,8 @@
         set_flag_option(flag_c, FLAG_LOG_VERBOSITY, EOPT_PARSE_FUNC, parse_log_verbosity);
         set_flag_option(flag_c, FLAG_LOG_VERBOSITY, EOPT_MULTIPLE_VAL, VALUE_NO_OVERRID);
 
+        /*  Init MITM option */
+        add_flag_option(flag_c, FLAG_MITM_STR, FLAG_MITM, FLAG_MITM_CHAR);
 
         s8 error = 0;
         u32 flag = parse_flag(argc, argv, flag_c, &error);
@@ -148,6 +150,7 @@ void init_malcolm(MalcolmCtx *c, int argc, char **argv) {
         } else if (has_flag(flags, FLAG_HELP)) {
             usage();
         }
+        c->flags = flags;
     #endif
 
     cli_args = extract_args(argc, argv);
