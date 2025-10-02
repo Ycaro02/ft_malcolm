@@ -38,6 +38,9 @@ services:
   trigger:
     build: ${ROOT_DIR}/rsc/docker
     command: sleep infinity
+    sysctls:
+      - net.ipv4.conf.all.arp_accept=1
+      - net.ipv4.conf.default.arp_accept=1
     networks:
       test-net:
         ipv4_address: 10.12.12.7

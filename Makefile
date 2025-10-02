@@ -77,6 +77,10 @@ bonus_complete_test: bonus
 	@printf "$(CYAN)Starting complete bonus test...$(RESET)\n"
 	@./rsc/tester/complete_test.sh btest
 
+sleep:
+	@printf "$(CYAN)Starting MITM test...$(RESET)\n"
+	@sleep infinity
+
 wire:
 	@printf "$(CYAN)Start wireshark container and attach the current terminal to it$(RESET)\n"
 	@./rsc/docker/run.sh "$(word 2,$(MAKECMDGOALS))" ; true

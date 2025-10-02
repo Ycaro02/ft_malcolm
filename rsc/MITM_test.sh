@@ -2,9 +2,20 @@
 
 source $(pwd)/rsc/sh/bash_log.sh
 
+ROOT_DIR=$(pwd)
 
-docker compose up -d --build
+source ${ROOT_DIR}/rsc/sh/bash_log.sh
 
+DC_CMD="docker compose -f rsc/tester/docker-compose.yml"
+DC_EXEC="${DC_CMD} exec"
+
+MAKEFILE_RULE="sleep"
+
+log I "Preparing .env file for tester stack ROOT_DIR=${ROOT_DIR}\n"
+echo "ROOT_DIR=${ROOT_DIR}" > ./rsc/tester/.env
+echo "MAKEFILE_RULE=${MAKEFILE_RULE}" >> ./rsc/tester/.env
+
+${DC_CMD} up -d --build
 
 # Colors for output
 RED='\033[0;31m'
@@ -15,12 +26,12 @@ NC='\033[0m' # No Color
 
 function get_container_ip() {
     # Return the IPv4 address of eth0 for a container (no TTY)
-    docker exec "$1" ip addr show eth0 | grep inet | awk '{print $2}' | cut -d '/' -f1 | tr -d '\n'
+    ${DC_EXEC} "$1" ip addr show eth0 | grep inet | awk '{print $2}' | cut -d '/' -f1 | tr -d '\n'
 }
 
 function get_container_mac() {
     # Return the MAC address of eth0 for a container (no TTY)
-    docker exec "$1" ip link show eth0 | grep link | awk '{print $2}'
+    ${DC_EXEC} "$1" ip link show eth0 | grep link | awk '{print $2}'
 }
 
 # Configuration
@@ -54,18 +65,18 @@ log I "${BLUE}======================================${RESET}\n\n"
 # Step 1: Check initial ARP tables
 log I "${BLUE}[1/6]${RESET} Checking initial ARP tables...\n"
 log I "Target ARP table:\n"
-docker exec "${TARGET_ONE}" ip neigh | grep "${TRIGGERS_IP}" || log I "No entry for ${TRIGGERS_IP}\n"
+${DC_EXEC} "${TARGET_ONE}" ip neigh | grep "${TRIGGERS_IP}" || log I "No entry for ${TRIGGERS_IP}\n"
 log I "Triggers ARP table:\n"
-docker exec "${TRIGGERS_ONE}" ip neigh | grep "${TARGET_IP}" || log I "No entry for ${TARGET_IP}\n"
+${DC_EXEC} "${TRIGGERS_ONE}" ip neigh | grep "${TARGET_IP}" || log I "No entry for ${TARGET_IP}\n"
 
 # Step 2: Start tcpdump in background
 log I "${BLUE}[2/6]${RESET} Starting tcpdump to capture traffic...\n"
-docker exec ft_malcolm tcpdump -i "${INTERFACE}" -n -l -A "tcp port ${TEST_PORT}" > /tmp/tcpdump_capture.txt 2>&1 &
+${DC_EXEC} ft_malcolm tcpdump -i "${INTERFACE}" -n -l -A "tcp port ${TEST_PORT}" > /tmp/tcpdump_capture.txt 2>&1 &
 sleep 2
 
 # Step 3: Launch the MITM attack
 log I "${BLUE}[3/6]${RESET} Launching MITM attack...\n"
-docker exec -d ft_malcolm bash -c "./a.out ${INTERFACE} ${TARGET_IP} ${TARGET_MAC} ${TRIGGERS_IP} ${TRIGGERS_MAC} > /tmp/mitm.log 2>&1"
+${DC_EXEC} -d ft_malcolm bash -c "./a.out ${INTERFACE} ${TARGET_IP} ${TARGET_MAC} ${TRIGGERS_IP} ${TRIGGERS_MAC} > /tmp/mitm.log 2>&1"
 
 # Wait for ARP poisoning to take effect
 log I "${YELLOW}Waiting for ARP poisoning to take effect (5 seconds)...${RESET}\n"
@@ -75,17 +86,17 @@ sleep 5
 log I "${BLUE}[4/6]${RESET} Verifying ARP poisoning...\n"
 
 log I "Target ARP table:\n"
-log I "$(docker exec "${TARGET_ONE}" ip neigh | grep "${TRIGGERS_IP}")"
+log I "$(${DC_EXEC} "${TARGET_ONE}" ip neigh | grep "${TRIGGERS_IP}")"
 echo ""
 
 log I "Triggers ARP table:\n"
-log I "$(docker exec "${TRIGGERS_ONE}" ip neigh | grep "${TARGET_IP}")"
+log I "$(${DC_EXEC} "${TRIGGERS_ONE}" ip neigh | grep "${TARGET_IP}")"
 echo ""
 
 log I "Our MAC: ${YELLOW}${MITM_MAC}${RESET}\n"
 
-TARGET_ARP=$(docker exec "${TARGET_ONE}" ip neigh | grep "${TRIGGERS_IP}")
-TRIGGERS_ARP=$(docker exec "${TRIGGERS_ONE}" ip neigh | grep "${TARGET_IP}")
+TARGET_ARP=$(${DC_EXEC} "${TARGET_ONE}" ip neigh | grep "${TRIGGERS_IP}")
+TRIGGERS_ARP=$(${DC_EXEC} "${TRIGGERS_ONE}" ip neigh | grep "${TARGET_IP}")
 
 if echo "${TARGET_ARP}" | grep -qi "${MITM_MAC}"; then
     log I "${GREEN}[OK]${RESET} Target successfully poisoned!\n"
@@ -102,7 +113,7 @@ echo ""
 
 # Step 5: Start nc listener
 log I "${BLUE}[5/6]${RESET} Starting netcat listener on target...\n"
-docker exec -d "${TARGET_ONE}" sh -c "nc -lvp ${TEST_PORT} -q 0 > /tmp/nc_out.log 2>&1"
+${DC_EXEC} -d "${TARGET_ONE}" sh -c "nc -lvp ${TEST_PORT} -q 0 > /tmp/nc_out.log 2>&1"
 sleep 1
 log I "${GREEN}[OK]${RESET} Listener started on ${TARGET_IP}:${TEST_PORT}\n"
 echo ""
@@ -111,7 +122,7 @@ echo ""
 log I "${BLUE}[6/6]${RESET} Sending test message...\n"
 log I "Message: ${YELLOW}${SECRET_MESSAGE}${RESET}\n"
 
-docker exec -i "${TRIGGERS_ONE}" bash -c "echo \"${SECRET_MESSAGE}\" | nc ${TARGET_ONE} ${TEST_PORT} -q 0"
+${DC_EXEC} -i "${TRIGGERS_ONE}" bash -c "echo \"${SECRET_MESSAGE}\" | nc ${TARGET_ONE} ${TEST_PORT} -q 0"
 
 log I "${GREEN}[OK]${RESET} Message sent from triggers to target\n"
 echo ""
