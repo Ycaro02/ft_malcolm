@@ -1,3 +1,5 @@
 ft_malcolm
 a.out
 ./rsc/tester/.env
+*.o
+*.a
