@@ -74,7 +74,7 @@ static s8 is_match_request(MalcolmCtx *c, unsigned char *arp_spa, unsigned char 
 
     INFO("Received ARP Request: Who has %s? Tell %s\n", tpa, inet_ntoa(*(InAddr *)arp_spa));
 
-    if (*(Addr *)arp_tpa == c->src_ip) {
+    if (*(Addr *)arp_tpa == c->src_ip && *(Addr *)arp_spa != c->src_ip) {
         return (TRUE);
     }
     return (FALSE);
