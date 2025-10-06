@@ -13,39 +13,43 @@
 #include <ifaddrs.h>
 
 
-typedef in_addr_t Addr;
-typedef struct addrinfo AddrInfo;
-typedef struct sockaddr_in Sockaddr_in;
-typedef struct sockaddr_ll Sockaddr_ll;
+typedef in_addr_t           Addr;
+typedef struct in_addr      InAddr;
+typedef struct addrinfo     AddrInfo;
+typedef struct sockaddr     SockAddr;
+typedef struct sockaddr_in  Sockaddr_in;
+typedef struct sockaddr_ll  Sockaddr_ll;
+typedef struct ifaddrs     IfAddrs;
+typedef struct ethhdr       EthHdr;
+typedef struct ether_arp    EtherArp;
 
-#define BUF_SIZE 1024
+#define BUFF_SIZE 1024
 
 #define MAC_ADDR_SIZE 18
 
+#define ARP_REPLY_PACKET_SIZE (sizeof(EthHdr) + sizeof(EtherArp))
+
 typedef struct MalcolmSender {
-    int sock;
+    int         sock;
     Sockaddr_ll addr_ll;
 } MalcolmSender;
 
 typedef struct MalcolmCtx {
+    MalcolmSender   sender;
     int             sock;
     Addr            src_ip;
-    u8              src_mac_real[ETH_ALEN];
-    char            src_mac_str[MAC_ADDR_SIZE];
+    u8              src_mac[ETH_ALEN];
     Addr            target_ip;
-    char            target_mac_str[MAC_ADDR_SIZE];
-    u8              target_mac_real[ETH_ALEN];
-    size_t          arp_reply_packet_len;
-    u8              arp_reply_packet[BUF_SIZE];
-    MalcolmSender   sender;
+    u8              target_mac[ETH_ALEN];
+    u8              arp_reply_packet[ARP_REPLY_PACKET_SIZE];
 } MalcolmCtx;
 
-typedef struct StatusIff {
-    unsigned int flag;
-    char *name;
-} StatusIff;
+typedef struct StatusIffAddr {
+    u32     flag;
+    char    *name;
+} StatusIffAddr;
 
-#define IFF_FLAGS_ARR (StatusIff[]) {\
+#define IFF_FLAGS_ARR (StatusIffAddr[]) {\
     { IFF_UP, "IFF_UP" },\
     { IFF_BROADCAST, "IFF_BROADCAST" },\
     { IFF_DEBUG, "IFF_DEBUG" },\
@@ -75,31 +79,23 @@ void dbg_display_arp_packet(const unsigned char *buffer, ssize_t len) {
 
         // DBG("Packet received, length: %zd bytes\n\n", len);
 
-        struct ethhdr *eth = (struct ethhdr *) buffer;
+        EthHdr *eth = (EthHdr *) buffer;
         (void)len;
         if (ntohs(eth->h_proto) == ETH_P_ARP) {
 
-            // Dump entête Ethernet
             DBG("=== Ethernet Header ===\n\n");
 
             char dest_mac[32] = {};
             char src_mac[32] = {};
-
             get_mac_addr(eth->h_dest, dest_mac);
             get_mac_addr(eth->h_source, src_mac);
 
             DBG("\tDestination MAC : %s\n", dest_mac);
             DBG("\tSource MAC      : %s\n", src_mac);
-
-
             DBG("\tProtocol (hex)  : 0x%04x\n\n", ntohs(eth->h_proto));
-
-        // Vérifie que c’est bien une trame ARP
-
             DBG("Received ARP packet, protocol: 0x%04x\n", ntohs(eth->h_proto));
 
-            struct ether_arp *arp = (struct ether_arp *)(buffer + sizeof(struct ethhdr));
-
+            EtherArp *arp = (EtherArp *)(buffer + sizeof(EthHdr));
             DBG("=== ARP Header ===\n");
             DBG("\tHardware type   : %u\n", ntohs(arp->ea_hdr.ar_hrd));
             DBG("\tProtocol type   : 0x%04x\n", ntohs(arp->ea_hdr.ar_pro));
@@ -110,28 +106,25 @@ void dbg_display_arp_packet(const unsigned char *buffer, ssize_t len) {
                    (ntohs(arp->ea_hdr.ar_op) == ARPOP_REQUEST) ? "request" :
                    (ntohs(arp->ea_hdr.ar_op) == ARPOP_REPLY)   ? "reply"   : "other");
 
+
             char sender_ip[INET_ADDRSTRLEN];
             char target_ip[INET_ADDRSTRLEN];
-
             inet_ntop(AF_INET, arp->arp_spa, sender_ip, sizeof(sender_ip));
             inet_ntop(AF_INET, arp->arp_tpa, target_ip, sizeof(target_ip));
 
 
-
             char s_mac[32] = {};
             char t_mac[32] = {};
-
             get_mac_addr(arp->arp_sha, s_mac);
             get_mac_addr(arp->arp_tha, t_mac);
 
             DBG("\tSender MAC      : %s\n", s_mac);
             DBG("\tSender IP       : %s\n", sender_ip);
-
             DBG("\tTarget MAC      : %s\n", t_mac);
             DBG("\tTarget IP       : %s\n", target_ip);
 
             if (ntohs(arp->ea_hdr.ar_op) == ARPOP_REQUEST) {
-                DBG(">>> ARP Request: Who has %s? Tell %s\n", target_ip, sender_ip);
+                DBG("ARP Request: Who has %s? Tell %s\n", target_ip, sender_ip);
             }
         } 
 }
@@ -141,14 +134,15 @@ s8 is_match_request(MalcolmCtx *c, unsigned char *arp_spa, unsigned char *arp_tp
     //     ft_strcmp(s_mac, c->target_mac_str) == 0) 
     // set_log_level(L_WARN);
 
-    char *tpa = ft_strdup(inet_ntoa(*(struct in_addr *)arp_tpa));
-    char *spa = ft_strdup(inet_ntoa(*(struct in_addr *)arp_spa));
+    (void)s_mac;
+
+    char *tpa = ft_strdup(inet_ntoa(*(InAddr *)arp_tpa));
+    char *spa = ft_strdup(inet_ntoa(*(InAddr *)arp_spa));
     INFO("Received ARP Request: Who has %s? Tell %s\n", tpa, spa);
     free(tpa);
     free(spa);
 
     if (*(Addr *)arp_tpa == c->src_ip) {
-        DBG("Src Mac: %s, Ctx Target Mac: %s\n", s_mac, c->target_mac_str);
         return (TRUE);
     }
     return (FALSE);
@@ -187,7 +181,7 @@ void init_malcolm_sender(MalcolmSender *sender, const char* interface_name ) {
     }
     DBG("Successfully opened socket: %i\n", sender->sock);
 
-    unsigned int ifindex = if_nametoindex(interface_name);
+    u32 ifindex = if_nametoindex(interface_name);
     if (ifindex == 0) {
         perror("if_nametoindex");
         close(sender->sock);
@@ -207,13 +201,11 @@ void init_malcolm_sender(MalcolmSender *sender, const char* interface_name ) {
 
 int send_raw_packet(MalcolmCtx *c) {
 
-    memcpy(c->sender.addr_ll.sll_addr, c->src_mac_real, ETH_ALEN);
+    memcpy(c->sender.addr_ll.sll_addr, c->src_mac, ETH_ALEN);
 
+    errno = 0;
 
-    ssize_t bytes_sent = sendto(c->sender.sock, c->arp_reply_packet, c->arp_reply_packet_len, 0,
-                               (struct sockaddr*)&c->sender.addr_ll,
-                               sizeof(c->sender.addr_ll));
-
+    ssize_t bytes_sent = sendto(c->sender.sock, c->arp_reply_packet, ARP_REPLY_PACKET_SIZE, 0, (SockAddr*)&c->sender.addr_ll, sizeof(c->sender.addr_ll));
     if (bytes_sent == -1) {
         perror("sendto");
         return -1;
@@ -225,15 +217,15 @@ int send_raw_packet(MalcolmCtx *c) {
 
 void build_packet(MalcolmCtx *c, unsigned char *buff) {
     // build response packet
-    struct ethhdr eth_resp;
+    EthHdr eth_resp;
 
 
-    memcpy(eth_resp.h_dest, c->target_mac_real, ETH_ALEN);
-    memcpy(eth_resp.h_source, c->src_mac_real, ETH_ALEN);
+    memcpy(eth_resp.h_dest, c->target_mac, ETH_ALEN);
+    memcpy(eth_resp.h_source, c->src_mac, ETH_ALEN);
 
     eth_resp.h_proto = htons(ETH_P_ARP);
 
-    struct ether_arp arp_hdr_resp;
+    EtherArp arp_hdr_resp;
     arp_hdr_resp.ea_hdr.ar_hrd = htons(ARPHRD_ETHER);
     arp_hdr_resp.ea_hdr.ar_pro = htons(ETH_P_IP);
     arp_hdr_resp.ea_hdr.ar_hln = ETH_ALEN;
@@ -243,17 +235,17 @@ void build_packet(MalcolmCtx *c, unsigned char *buff) {
     memcpy(arp_hdr_resp.arp_spa, &c->src_ip, 4);
     memcpy(arp_hdr_resp.arp_tpa, &c->target_ip, 4);
 
-    memcpy(arp_hdr_resp.arp_tha, c->target_mac_real, ETH_ALEN);
+    memcpy(arp_hdr_resp.arp_tha, c->target_mac, ETH_ALEN);
 
-    memcpy(arp_hdr_resp.arp_sha, c->src_mac_real, ETH_ALEN);
+    memcpy(arp_hdr_resp.arp_sha, c->src_mac, ETH_ALEN);
 
 
     DBG(YELLOW"=== ARP Reply Packet BUILD ===\n"RESET);
-    // unsigned char buff[BUF_SIZE] = {};
-    memcpy(buff, &eth_resp, sizeof(struct ethhdr));
-    memcpy(buff + sizeof(struct ethhdr), &arp_hdr_resp, sizeof(struct ether_arp));
+    // unsigned char buff[BUFF_SIZE] = {};
+    memcpy(buff, &eth_resp, sizeof(EthHdr));
+    memcpy(buff + sizeof(EthHdr), &arp_hdr_resp, sizeof(EtherArp));
     DBG("-----------------------------------------------------------------------------------------------\n");
-    dbg_display_arp_packet(buff, sizeof(struct ethhdr) + sizeof(struct ether_arp));
+    dbg_display_arp_packet(buff, sizeof(EthHdr) + sizeof(EtherArp));
     DBG("-----------------------------------------------------------------------------------------------\n");
 
 }
@@ -262,7 +254,7 @@ void listen_arp_request(MalcolmCtx *c, const unsigned char *buffer, ssize_t len)
 
     (void)len;
 
-    struct ethhdr *eth = (struct ethhdr *) buffer;
+    EthHdr *eth = (EthHdr *) buffer;
 
     int is_arp = (ntohs(eth->h_proto) == ETH_P_ARP);
 
@@ -271,7 +263,7 @@ void listen_arp_request(MalcolmCtx *c, const unsigned char *buffer, ssize_t len)
         return;
     }
 
-    struct ether_arp arp_hdr = *(struct ether_arp *)(buffer + sizeof(struct ethhdr));
+    EtherArp arp_hdr = *(EtherArp *)(buffer + sizeof(EthHdr));
 
     int packet_type = ntohs(arp_hdr.ea_hdr.ar_op) == ARPOP_REQUEST ? ARPOP_REQUEST : ntohs(arp_hdr.ea_hdr.ar_op) == ARPOP_REPLY ? ARPOP_REPLY : -1;
 
@@ -291,7 +283,7 @@ void listen_arp_request(MalcolmCtx *c, const unsigned char *buffer, ssize_t len)
             DBG(GREEN"*** Matched ARP packet ***\n\n"RESET);
 
             DBG(YELLOW"=== SENDING ARP Reply Packet ===\n"RESET);
-            // int sent_bool = send_raw_packet(interface_name, c->arp_reply_packet, sizeof(struct ethhdr) + sizeof(struct ether_arp), c->src_mac_real);
+            // int sent_bool = send_raw_packet(interface_name, c->arp_reply_packet, sizeof(EthHdr) + sizeof(EtherArp), c->src_mac);
             int sent_bool = send_raw_packet(c);
             DBG("Sent bool %d\n", sent_bool);
 
@@ -299,24 +291,18 @@ void listen_arp_request(MalcolmCtx *c, const unsigned char *buffer, ssize_t len)
         } else {
             DBG("Src IP: %d, Ctx Src IP: %d\n", *(Addr*)arp_hdr.arp_spa, c->target_ip);
             DBG("Target IP: %d, Ctx Target IP: %d\n", *(Addr*)arp_hdr.arp_tpa, c->src_ip);
-            DBG("Src MAC: %s, Ctx Src MAC: %s\n", s_mac, c->target_mac_str);
-            // INFO("Target MAC: %s, Ctx Target MAC: %s\n", t_mac, c->target_mac_str);
             DBG("ARP packet does not match context\n\n");
         }
-        // exit(0);
     }
 }
 
 
-void listen_arp(MalcolmCtx *c, char *interface_name) {
-    char buffer[BUF_SIZE] = {}; /*Buffer for Ethernet Frame*/
+void listen_arp(MalcolmCtx *c) {
+    char buffer[BUFF_SIZE] = {}; /*Buffer for Ethernet Frame*/
 
 
     DBG("Server started, entering initialiation phase...\n");
 
-    (void)interface_name;
-
-    /*open socket*/
     errno = 0;
     c->sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (c->sock == -1) {
@@ -325,9 +311,11 @@ void listen_arp(MalcolmCtx *c, char *interface_name) {
     }
     DBG("Successfully opened socket: %i\n", c->sock);
 
+    INFO("Starting ARP listener...\n");
+
     while (1) {
         errno = 0;
-        ssize_t length = recvfrom(c->sock, buffer, BUF_SIZE, 0, NULL, NULL);
+        ssize_t length = recvfrom(c->sock, buffer, BUFF_SIZE, 0, NULL, NULL);
         if (length == -1) {
             perror("recvfrom:");
             exit(1);
@@ -339,7 +327,7 @@ void listen_arp(MalcolmCtx *c, char *interface_name) {
         DBG("-----------------------------------------------------------------------------------------------\n");
 
         listen_arp_request(c, (unsigned char *)buffer, length);
-        ft_bzero(buffer, BUF_SIZE);
+        ft_bzero(buffer, BUFF_SIZE);
     }
 }
 
@@ -348,7 +336,7 @@ void display_iff_flag(u32 flag) {
     char buffer[1024] = {};
     int idx = 0;
 
-    StatusIff iff_flag_array[] = IFF_FLAGS_ARR;
+    StatusIffAddr iff_flag_array[] = IFF_FLAGS_ARR;
 
     for (int i = 0; iff_flag_array[i].flag != 0; i++) {
         if (flag & iff_flag_array[i].flag) {
@@ -371,26 +359,26 @@ s8 is_up_if(u32 flag) {
 }
 
 
-void display_ifaddrs(struct ifaddrs *ifa) {
+void display_ifaddrs(IfAddrs *ifa) {
     
     DBG("--------------------------------------------------------------------------------------\n");
     
 
     if (ifa->ifa_addr->sa_family == AF_INET) {
-        struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
+        Sockaddr_in *addr = (Sockaddr_in *)ifa->ifa_addr;
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
         DBG("Interface: %s, Address: %s\n", ifa->ifa_name, ip);
         DBG("Flags: 0x%x\n", ifa->ifa_flags);
         display_iff_flag(ifa->ifa_flags);
         if (ifa->ifa_netmask) {
-            struct sockaddr_in *netmask = (struct sockaddr_in *)ifa->ifa_netmask;
+            Sockaddr_in *netmask = (Sockaddr_in *)ifa->ifa_netmask;
             char nm[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &netmask->sin_addr, nm, sizeof(nm));
             DBG("Netmask: %s\n", nm);
         }
         if (ifa->ifa_broadaddr) {
-            struct sockaddr_in *broadaddr = (struct sockaddr_in *)ifa->ifa_broadaddr;
+            Sockaddr_in *broadaddr = (Sockaddr_in *)ifa->ifa_broadaddr;
             char ba[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &broadaddr->sin_addr, ba, sizeof(ba));
             DBG("Broadcast Address: %s\n", ba); 
@@ -403,7 +391,7 @@ void display_ifaddrs(struct ifaddrs *ifa) {
  *	@return in_addr_t ipv4 address of the process
 */
 s8 get_interface_name(char *interface_name) {
-    struct ifaddrs *ifa_head, *current;
+    IfAddrs *ifa_head, *current;
 
     errno = 0;
     if (getifaddrs(&ifa_head) == -1) {
@@ -416,7 +404,7 @@ s8 get_interface_name(char *interface_name) {
             display_ifaddrs(current);
             if (is_up_if(current->ifa_flags) && is_broadcast_if(current->ifa_flags) && !is_loopback_if(current->ifa_flags)) {
                 INFO("Listening on interface: %s\n", current->ifa_name);
-                ft_strlcpy(interface_name, current->ifa_name, ft_strlen(current->ifa_name));
+                ft_strlcpy(interface_name, current->ifa_name, ft_strlen(current->ifa_name) + 1);
                 break;
             }
         }
@@ -429,7 +417,7 @@ s8 get_interface_name(char *interface_name) {
 
 /* Ip address string format to bin format */
 Addr ipv4_str_toaddr(char *str) {
-    struct in_addr addr;
+    InAddr addr;
 
     /* Convert presentation format to binary network format */
     if (inet_pton(AF_INET, str, &addr) <= 0) {
@@ -571,19 +559,10 @@ void parse_input(MalcolmCtx *c, char **argv) {
                 ERR("Invalid MAC address: (%s)\n", argv[i]);
                 exit(EXIT_FAILURE);
             }
-            dst = i == 2 ? c->src_mac_str : c->target_mac_str;
-            memcpy(dst, argv[i], MAC_ADDR_SIZE);
+            dst = i == 2 ? c->src_mac : c->target_mac;
+            mac_addr_str_to_bytes(argv[i], dst);
         }
     }
-
-    mac_addr_str_to_bytes(c->src_mac_str, c->src_mac_real);
-    mac_addr_str_to_bytes(c->target_mac_str, c->target_mac_real);
-
-    build_packet(c, c->arp_reply_packet);
-    c->arp_reply_packet_len = sizeof(struct ethhdr) + sizeof(struct ether_arp);
-
-    init_malcolm_sender(&c->sender, "eth0");
-
 
 
 }
@@ -595,28 +574,38 @@ void display_ctx(MalcolmCtx *c) {
     inet_ntop(AF_INET, &c->src_ip, src_ip_str, sizeof(src_ip_str));
     inet_ntop(AF_INET, &c->target_ip, target_ip_str, sizeof(target_ip_str));
 
-    DBG("Context:\n");
-    DBG("  Source IP       : %s\n", src_ip_str);
-    DBG("  Source MAC STR  : %s\n", c->src_mac_str);
-    DBG("  Target IP       : %s\n", target_ip_str);
-    DBG("  Target MAC STR  : %s\n", c->target_mac_str);
-    DBG("  ARP Reply Packet Length : %zu\n", c->arp_reply_packet_len);
+    INFO("Context:\n");
+    INFO("  Source IP   : %s\n", src_ip_str);
+    INFO("  Target IP   : %s\n", target_ip_str);
+    
+    INFO("  Source MAC  : %02x:%02x:%02x:%02x:%02x:%02x\n",
+        c->src_mac[0], c->src_mac[1], c->src_mac[2],
+        c->src_mac[3], c->src_mac[4], c->src_mac[5]);
+        
+    INFO("  Target MAC  : %02x:%02x:%02x:%02x:%02x:%02x\n\n",
+        c->target_mac[0], c->target_mac[1], c->target_mac[2],
+        c->target_mac[3], c->target_mac[4], c->target_mac[5]);
+}
+        
+void ft_malcolm(MalcolmCtx *c) {
+    char interface_name[BUFF_SIZE] = {};
+    s8 ret = get_interface_name(interface_name);
+    if (!ret) {
+        ERR("Failed to get network interface\n");
+        exit(EXIT_FAILURE);
+    }
 
-    DBG("REAL Source MAC  : %02x:%02x:%02x:%02x:%02x:%02x\n",
-         c->src_mac_real[0], c->src_mac_real[1], c->src_mac_real[2],
-         c->src_mac_real[3], c->src_mac_real[4], c->src_mac_real[5]);
+    INFO("Using interface: %s\n", interface_name);
+    build_packet(c, c->arp_reply_packet);
+    init_malcolm_sender(&c->sender, interface_name);
 
-    DBG("REAL Target MAC  : %02x:%02x:%02x:%02x:%02x:%02x\n\n",
-         c->target_mac_real[0], c->target_mac_real[1], c->target_mac_real[2],
-         c->target_mac_real[3], c->target_mac_real[4], c->target_mac_real[5]);
+    listen_arp(c);
 }
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    set_log_level(L_INFO);
-    
     MalcolmCtx ctx = {0};
+
+    set_log_level(L_INFO);
 
     if (argc != 5) {
         ERR("Usage: %s <source ip> <source mac> <target ip> <target mac>\n", argv[0]);
@@ -624,16 +613,7 @@ int main(int argc, char **argv) {
     }
     
     parse_input(&ctx, argv);
-    
     display_ctx(&ctx);
-
-    INFO("Starting ARP listener...\n");
-
-    char interface_name[IFNAMSIZ] = {};
-    s8 ret = get_interface_name(interface_name);
-    if (!ret) {
-        ERR("Failed to get network interface\n");
-        exit(EXIT_FAILURE);
-    }
-    listen_arp(&ctx, interface_name);
+    ft_malcolm(&ctx);
+    return (0);
 }
