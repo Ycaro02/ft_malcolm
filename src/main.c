@@ -1,16 +1,15 @@
 #include "../libft/libft.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <net/if.h>
-#include <netinet/if_ether.h>
-#include <netpacket/packet.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <ifaddrs.h>
+#include <sys/socket.h>         /* socket */
+#include <arpa/inet.h>          /* inet_ntoa ... */
+#include <net/if.h>             /* if_nametoindex ... */
+#include <netinet/if_ether.h>   /* struct ethhdr, ether_arp ... */
+#include <netpacket/packet.h>   /* struct sockaddr_ll ... */
+#include <netdb.h>              /* struct addrinfo ... */
+#include <ifaddrs.h>            /* getifaddrs ... */
+#include <signal.h>             /* signal handling ... */
 
+int g_signal_received = 0;
 
 /* Type definitions */
 typedef in_addr_t           Addr;
@@ -344,12 +343,28 @@ void listen_arp(MalcolmCtx *c) {
     }
     DBG("Successfully opened socket: %i\n", c->sock);
 
+    /* Socket timeout */
+    struct timeval timeout = {0, 100000}; // 100 milliseconds timeout
+    errno = 0;
+    if (setsockopt(c->sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        perror("setsockopt:");
+        close(c->sock);
+        exit(1);
+    }
+
     INFO("Starting ARP listener...\n");
 
     while (1) {
+
+        if (g_signal_received) {
+            INFO("Signal received, exiting...\n");
+            close(c->sock);
+            exit(0);
+        }
+
         errno = 0;
         ssize_t length = recvfrom(c->sock, buffer, BUFF_SIZE, 0, NULL, NULL);
-        if (length == -1) {
+        if (length == -1 && errno != EWOULDBLOCK && errno != EINTR) {
             perror("recvfrom:");
             exit(1);
         }
@@ -615,26 +630,31 @@ void test_mac_addr_func() {
  * @param c Pointer to the MalcolmCtx structure to populate
  * @param argv Command-line arguments
  */
-void parse_input(MalcolmCtx *c, char **argv) {
+// s8 parse_input(MalcolmCtx *c, char **argv) {
+s8 parse_input(MalcolmCtx *c, List *cli_args) {
     void *dst = NULL;
     
     for (int i = 1; i < 5; i++) {
-        DBG("Argument %d: %s\n", i, argv[i]);
+        char *data = cli_args->content;
+
+        DBG("Argument %d: %s\n", i, data);
         if (i == 1 || i == 3) {
             dst = i == 1 ? &c->src_ip : &c->target_ip;
-            if (!is_ipv4_addr(argv[i], dst)) {
-                ERR("Invalid IPv4 address: (%s)\n", argv[i]);
-                exit(EXIT_FAILURE);
+            if (!is_ipv4_addr(data, dst)) {
+                ERR("Invalid IPv4 address: (%s)\n", data);
+                return (FALSE);
             }
         } else {
-            if (!is_mac_addr(argv[i])) {
-                ERR("Invalid MAC address: (%s)\n", argv[i]);
-                exit(EXIT_FAILURE);
+            if (!is_mac_addr(data)) {
+                ERR("Invalid MAC address: (%s)\n", data);
+                return (FALSE);
             }
             dst = i == 2 ? c->src_mac : c->target_mac;
-            mac_addr_str_to_bytes(argv[i], dst);
+            mac_addr_str_to_bytes(data, dst);
         }
+        cli_args = cli_args->next;
     }
+    return (TRUE);
 }
 
 /* Debug function to display the current context */
@@ -689,8 +709,8 @@ typedef enum FlagOptionVal {
 
 
 struct log_verbosity {
-    u8 level;          /* Verbosity level */
-    char *level_str;   /* Verbosity level as string */
+    u8      level;          /* Verbosity level */
+    char    *level_str;     /* Verbosity level as string */
 };
 
 typedef struct log_verbosity LogVerbosity;
@@ -761,11 +781,12 @@ s8 parse_log_verbosity(void *opt_ptr, void *data) {
 
 }
 
-u32 init_flag_options(int argc, char **argv) {
+u32 init_flag_options(int argc, char **argv, s8 *error_flag) {
     FlagContext *flag_c = flag_context_init(argv);
     if (!flag_c) {
         ERR("Memory allocation error\n");
-        exit(EXIT_FAILURE);
+        *error_flag = -1;
+        return (0);
     }
 
     add_flag_option(flag_c, FLAG_HELP_STR, FLAG_HELP, FLAG_HELP_CHAR);
@@ -783,38 +804,88 @@ u32 init_flag_options(int argc, char **argv) {
     u32 flag = parse_flag(argc, argv, flag_c, &error);
     if (error == -1) {
         ERR("Error parsing flags\n");
-        free(flag_c);
-        exit(EXIT_FAILURE);
+        free_flag_context(flag_c);
+        *error_flag = -1;
+        return (0);
     }
 
-    DBG("DEBUG Msg\n");
-    INFO("INFO Msg\n");
-    WARN("WARN Msg\n");
-    ERR("ERR Msg\n");
-
     display_option_list(*flag_c);
-    
+    free_flag_context(flag_c);
     return (flag);
 }
 
+
+#ifdef MALCOLM_BONUS
+    void usage(char *prog_name) {
+        printf("Usage: %s [options] <src_ip> <src_mac> <target_ip> <target_mac>\n", prog_name);
+        printf("Options:\n");
+        printf("  -h, --help               Show this help message and exit\n");
+        printf("  -v, --verbosity <level>  Set log verbosity level (1-4 or none, error, warn, info, debug)\n");
+        exit(EXIT_SUCCESS);
+    }
+#else
+    void usage(char *prog_name) {
+        printf("Usage: %s <src_ip> <src_mac> <target_ip> <target_mac>\n", prog_name);
+        exit(EXIT_SUCCESS);
+    }
+#endif
+
+
+
+void handle_sigint(int sig) {
+    (void)sig;
+    INFO("Caught SIGINT, exiting...\n");
+    g_signal_received = 1;
+}
+
+void init_signal_handling(void) {
+    struct sigaction sa = {};
+    sa.sa_handler = handle_sigint;
+    sigaction(SIGINT, &sa, NULL);
+}
+
 int main(int argc, char **argv) {
+    
+    init_signal_handling();
+
     MalcolmCtx ctx = {0};
 
-    set_log_level(L_DEBUG);
+
+    set_log_level(L_INFO);
 
     #ifdef MALCOLM_BONUS
         INFO(GREEN"*** BONUS MODE ENABLED ***\n"RESET);
-        u32 flags = init_flag_options(argc, argv);
+        s8 error_flag = 0;
+        u32 flags = init_flag_options(argc, argv, &error_flag);
+        if (error_flag == -1) {
+            exit(EXIT_FAILURE);
+        }
+        if (has_flag(flags, FLAG_HELP)) {
+            usage(argv[0]);
+        }
     #endif
+  
+    List *cli_args = extract_args(argc, argv);
+    if (!cli_args) {
+        ERR("Failed to extract command line arguments\n");
+        exit(EXIT_FAILURE);
+    } else if (ft_lstsize(cli_args) != 4) {
+        ERR("Invalid number of mandatory arguments. Expected 4, got %d\n", ft_lstsize(cli_args));
+        ft_lstclear(&cli_args, free);
+        usage(argv[0]);
+    }
 
-
-    if (argc != 5) {
-        ERR("Usage: %s <source ip> <source mac> <target ip> <target mac>\n", argv[0]);
+    if (!parse_input(&ctx, cli_args)) {
+        ERR("Failed to parse input arguments exit\n");
+        ft_lstclear(&cli_args, free);
         exit(EXIT_FAILURE);
     }
-    
-    parse_input(&ctx, argv);
+
+    ft_lstclear(&cli_args, free);
     display_ctx(&ctx);
+
+
     ft_malcolm(&ctx);
+
     return (0);
 }
