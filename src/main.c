@@ -239,13 +239,8 @@ void build_packet(MalcolmCtx *c, unsigned char *buff) {
     // build response packet
     struct ethhdr eth_resp;
 
-    // memcpy(eth_resp.h_source, c->target_mac_real, ETH_ALEN);
-    // memcpy(eth_resp.h_source, c->src_mac_real, ETH_ALEN);
 
-    // CORRECTION: Destination = target MAC (où on veut envoyer)
     memcpy(eth_resp.h_dest, c->target_mac_real, ETH_ALEN);
-    
-    // CORRECTION: Source = notre MAC (qui envoie le paquet)
     memcpy(eth_resp.h_source, c->src_mac_real, ETH_ALEN);
 
     eth_resp.h_proto = htons(ETH_P_ARP);
