@@ -1,0 +1,57 @@
+
+services:
+  ft_malcolm:
+    build: ${ROOT_DIR}/rsc/docker
+    container_name: ft_malcolm
+    volumes:
+      - ${ROOT_DIR:?error}:/app
+    privileged: true
+    working_dir: /app
+    command: make test
+    networks:
+      test-net:
+        ipv4_address: 10.12.10.10
+        mac_address: 10:12:10:10:cc:dd
+
+  target:
+    build: ${ROOT_DIR}/rsc/docker
+    container_name: target
+    volumes:
+      - ${ROOT_DIR:?error}:/app
+    working_dir: /app
+    sysctls:
+      - net.ipv4.conf.all.arp_accept=1
+      - net.ipv4.conf.default.arp_accept=1
+    # only listen arp request
+    command: sleep infinity
+    networks:
+      test-net:
+        ipv4_address: 10.12.10.22
+        mac_address: 10:12:10:22:aa:bb
+
+  poisoned:
+    image: nginx:latest
+    container_name: poisoned
+    restart: unless-stopped
+    networks:
+      test-net:
+        ipv4_address: 10.12.255.255
+        mac_address: 10:12:12:12:12:12
+
+  trigger:
+    build: ${ROOT_DIR}/rsc/docker
+    container_name: trigger
+    command: sleep infinity
+    networks:
+      test-net:
+        ipv4_address: 10.12.12.7
+        mac_address: 10:12:12:07:07:07
+
+networks:
+  test-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/8
+          gateway: 10.0.0.1
+

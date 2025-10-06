@@ -605,7 +605,7 @@ void ft_malcolm(MalcolmCtx *c) {
 int main(int argc, char **argv) {
     MalcolmCtx ctx = {0};
 
-    set_log_level(L_INFO);
+    set_log_level(L_DEBUG);
 
     if (argc != 5) {
         ERR("Usage: %s <source ip> <source mac> <target ip> <target mac>\n", argv[0]);
