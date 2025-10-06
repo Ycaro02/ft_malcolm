@@ -3,7 +3,7 @@
 services:
   ft_malcolm:
     build: ./rsc/docker
-    container_name: wire-shark-ft_malcolm
+    container_name: ft_malcolm
     volumes:
       - ./:/app
       - ~/.ssh/:/root/.ssh
@@ -16,8 +16,8 @@ services:
     command: wireshark -k -i any --no-promiscuous-mode -f "arp"
     networks:
       test-net:
-        ipv4_address: 172.20.0.10
-        mac_address: 02:42:ac:14:00:0a
+        ipv4_address: 10.12.10.10
+        mac_address: 10:12:10:10:cc:dd
 
   target:
     build: ./rsc/docker
@@ -37,22 +37,32 @@ services:
     command: wireshark -k -i any --no-promiscuous-mode -f "arp"
     networks:
       test-net:
-        ipv4_address: 172.20.0.20
-        mac_address: 02:42:ac:14:00:14
+        ipv4_address: 10.12.10.22
+        mac_address: 10:12:10:22:aa:bb
 
-  triggers:
+  poisoned:
     image: nginx:latest
+    container_name: poisoned
     restart: unless-stopped
     networks:
       test-net:
-        ipv4_address: 172.20.0.30
-        mac_address: 02:42:ac:14:00:1e
+        ipv4_address: 10.12.255.255
+        mac_address: 10:12:12:12:12:12
+
+  trigger:
+    build: ./rsc/docker
+    container_name: trigger
+    command: sleep infinity
+    networks:
+      test-net:
+        ipv4_address: 10.12.12.7
+        mac_address: 10:12:12:07:07:07
 
 networks:
   test-net:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
+        - subnet: 10.0.0.0/8
+          gateway: 10.0.0.1
 

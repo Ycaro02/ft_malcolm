@@ -3,10 +3,7 @@
 
 # LOCAL_IP=$(ip a | grep eth0 | grep inet | awk '{print $2}' | cut -d '/' -f1)
 # LOCAL_MAC=$(ip a | grep eth0 -C1 | grep 'link/ether' | awk '{print $2}')
-
-
-./ft_malcolm 172.18.0.4 aa:aa:aa:aa:aa:aa 172.18.0.3 02:42:ac:12:00:03
-
+# ./ft_malcolm 172.18.0.4 aa:aa:aa:aa:aa:aa 172.18.0.3 02:42:ac:12:00:03
 
 
 SOURCE_IP=${1}

@@ -10,9 +10,9 @@ docker compose up -d --build
 # Set up git user configuration
 GIT_EMAIL=$(git config user.email)
 GIT_NAME=$(git config user.name)
-docker exec wire-shark-ft_malcolm git config --global user.email "${GIT_EMAIL}"
-docker exec wire-shark-ft_malcolm git config --global user.name "${GIT_NAME}"
+docker exec ft_malcolm git config --global user.email "${GIT_EMAIL}"
+docker exec ft_malcolm git config --global user.name "${GIT_NAME}"
 
 # Start zsh in the container
-docker exec -it wire-shark-ft_malcolm zsh
+docker exec -it ft_malcolm zsh
 

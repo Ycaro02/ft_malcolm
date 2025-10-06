@@ -60,7 +60,7 @@ clean_lib:
 	@printf "$(RED)Clean libft, list$(RESET)\n"
 
 test: $(NAME)
-	./ft_malcolm 172.20.0.30 aa:aa:aa:aa:aa:aa 172.20.0.20 02:42:ac:14:00:14
+	./ft_malcolm 10.12.255.255 aa:bb:cc:dd:ee:ff 10.12.10.22 10:12:10:22:aa:bb
 
 wire:
 	@printf "$(CYAN)Start wireshark container and attach the current terminal to it$(RESET)\n"
