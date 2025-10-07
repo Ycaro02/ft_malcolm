@@ -23,8 +23,12 @@ log I "Starting test up the stack...\n"
 log I "Running malcolm with args: ${MALCOLM_ARGS}\n"
 ${DC_CMD} up -d > /dev/null 2>&1
 
+sleep 2
+
 log I "Sending ARP request from trigger container...\n"
 ${DC_CMD} exec -it trigger arping -c 1 10.12.255.255 > /dev/null 2>&1
+
+sleep 5
 
 log I "Checking if target received the ARP request...\n"
 RES=$(${DC_CMD} exec -it target cat /proc/net/arp | grep 10.12.255.255 | grep "aa:bb:cc:dd:ee:ff")
