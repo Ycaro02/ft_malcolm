@@ -52,7 +52,18 @@ services:
   trigger:
     build: ./rsc/docker
     container_name: trigger
-    command: sleep infinity
+    # command: sleep infinity
+    privileged: true
+    volumes:
+      - ./:/app
+      - ~/.ssh/:/root/.ssh
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - DISPLAY=${DISPLAY}
+    command: wireshark -k -i any --no-promiscuous-mode -f "arp"
+    sysctls:
+      - net.ipv4.conf.all.arp_accept=1
+      - net.ipv4.conf.default.arp_accept=1
     networks:
       test-net:
         ipv4_address: 10.12.12.7
