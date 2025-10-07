@@ -49,10 +49,16 @@ s8 send_raw_packet(MalcolmCtx *c) {
     }
     
     char source_ip_str[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &c->src_ip, source_ip_str, sizeof(source_ip_str));
+    // inet_ntop(AF_INET, &c->src_ip, source_ip_str, sizeof(source_ip_str));
 
     char source_mac_str[18] = {};
-    mac_addr_byte_to_str(c->src_mac, source_mac_str);
+
+    EtherArp *arp = (EtherArp *)(c->arp_reply_packet + sizeof(EthHdr));
+
+    inet_ntop(AF_INET, arp->arp_spa, source_ip_str, sizeof(source_ip_str));
+
+    // mac_addr_byte_to_str(c->src_mac, source_mac_str);
+    mac_addr_byte_to_str(arp->arp_sha, source_mac_str);
 
     INFO("Packet sent successfully:\n");
     INFO("%s is at %s\n", source_ip_str, source_mac_str);
@@ -65,11 +71,11 @@ s8 send_raw_packet(MalcolmCtx *c) {
  * @param c Pointer to the MalcolmCtx structure containing context information
  * @param buff Pointer to the buffer where the ARP reply packet will be constructed
  */
-void build_packet(MalcolmCtx *c, unsigned char *buff) {
+void build_packet(u8 *buff, Addr src_ip, u8 *src_mac, Addr target_ip, u8 *target_mac) {
     EthHdr eth_resp;
 
-    ft_memcpy(eth_resp.h_dest, c->target_mac, ETH_ALEN);
-    ft_memcpy(eth_resp.h_source, c->src_mac, ETH_ALEN);
+    ft_memcpy(eth_resp.h_dest, target_mac, ETH_ALEN);
+    ft_memcpy(eth_resp.h_source, src_mac, ETH_ALEN);
     eth_resp.h_proto = htons(ETH_P_ARP);
 
     EtherArp arp_hdr_resp;
@@ -79,10 +85,10 @@ void build_packet(MalcolmCtx *c, unsigned char *buff) {
     arp_hdr_resp.ea_hdr.ar_pln = 4;
     arp_hdr_resp.ea_hdr.ar_op = htons(ARPOP_REPLY);
    
-    ft_memcpy(arp_hdr_resp.arp_spa, &c->src_ip, 4);
-    ft_memcpy(arp_hdr_resp.arp_tpa, &c->target_ip, 4);
-    ft_memcpy(arp_hdr_resp.arp_tha, c->target_mac, ETH_ALEN);
-    ft_memcpy(arp_hdr_resp.arp_sha, c->src_mac, ETH_ALEN);
+    ft_memcpy(arp_hdr_resp.arp_spa, &src_ip, 4);
+    ft_memcpy(arp_hdr_resp.arp_tpa, &target_ip, 4);
+    ft_memcpy(arp_hdr_resp.arp_tha, target_mac, ETH_ALEN);
+    ft_memcpy(arp_hdr_resp.arp_sha, src_mac, ETH_ALEN);
 
 
     DBG(YELLOW"=== ARP Reply Packet BUILD ===\n"RESET);

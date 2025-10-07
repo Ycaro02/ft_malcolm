@@ -31,6 +31,7 @@ typedef struct ether_arp    EtherArp;
 typedef enum FlagOptionVal {
     FLAG_HELP = 1U,
     FLAG_LOG_VERBOSITY = 2U,
+    FLAG_MITM = 4U
 } FlagOptionVal;
 
 /* Flag option strings and characters */
@@ -39,6 +40,9 @@ typedef enum FlagOptionVal {
 
 #define FLAG_LOG_VERBOSITY_CHAR 'v'
 #define FLAG_LOG_VERBOSITY_STR "verbosity"
+
+#define FLAG_MITM_CHAR 'm'
+#define FLAG_MITM_STR "mitm"
 
 #define MALCOLM_BONUS_USAGE \
 "Usage: ./ft_malcolm [options] <src_ip> <src_mac> <target_ip> <target_mac>\n"\
@@ -78,6 +82,7 @@ typedef struct MalcolmCtx {
     Addr            target_ip;                              /* Target IP address */
     u8              target_mac[ETH_ALEN];                   /* Target MAC address */
     u8              arp_reply_packet[ARP_REPLY_SIZE];       /* ARP reply packet */
+    u32             flags;                                  /* Bitmask of flags */
 } MalcolmCtx;
 
 /* Structure to map interface flags to their names */
@@ -124,7 +129,7 @@ s8      get_interface_name(char *interface_name);
 
 /* arp_reply.c */
 void    init_malcolm_sender(MalcolmSender *sender, const char* interface_name );
-void    build_packet(MalcolmCtx *c, unsigned char *buff);
+void    build_packet(u8 *buff, Addr src_ip, u8 *src_mac, Addr target_ip, u8 *target_mac);
 s8      send_raw_packet(MalcolmCtx *c);
 
 /* listen_arp_request_request.c */
@@ -133,5 +138,8 @@ void    listen_arp_request(MalcolmCtx *c);
 
 /* init_malcolm.c */
 void    init_malcolm(MalcolmCtx *c, int argc, char **argv);
+
+/* mitm.c */
+void    mitm_attack(MalcolmCtx *c);
 
 #endif /* FT_MALCOLM_H */

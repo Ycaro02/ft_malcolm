@@ -15,6 +15,7 @@ SRCS			=	log/log.c\
 					arp_reply.c\
 					listen_arp_request.c\
 					init_malcolm.c\
+					mitm.c\
 
 MAKE_LIBFT		=	make -s -C libft -j
 

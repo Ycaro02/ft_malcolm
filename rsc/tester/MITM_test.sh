@@ -9,7 +9,8 @@ source ${ROOT_DIR}/rsc/sh/bash_log.sh
 DC_CMD="docker compose -f rsc/tester/docker-compose.yml"
 DC_EXEC="${DC_CMD} exec"
 
-MAKEFILE_RULE="sleep"
+# MAKEFILE_RULE="sleep"
+MAKEFILE_RULE="bonus_mitm"
 
 log I "Preparing .env file for tester stack ROOT_DIR=${ROOT_DIR}\n"
 echo "ROOT_DIR=${ROOT_DIR}" > ./rsc/tester/.env
@@ -59,31 +60,24 @@ log I "${BLUE}======================================${RESET}\n"
 log I "${BLUE}   MITM Attack Automated Test${RESET}\n"
 log I "${BLUE}======================================${RESET}\n\n"
 
-
-# trap cleanup EXIT INT TERM
-
 # Step 1: Check initial ARP tables
-log I "${BLUE}[1/6]${RESET} Checking initial ARP tables...\n"
+log I "${BLUE}[1/5]${RESET} Checking initial ARP tables...\n"
 log I "Target ARP table:\n"
 ${DC_EXEC} "${TARGET_ONE}" ip neigh | grep "${TRIGGERS_IP}" || log I "No entry for ${TRIGGERS_IP}\n"
 log I "Triggers ARP table:\n"
 ${DC_EXEC} "${TRIGGERS_ONE}" ip neigh | grep "${TARGET_IP}" || log I "No entry for ${TARGET_IP}\n"
 
 # Step 2: Start tcpdump in background
-log I "${BLUE}[2/6]${RESET} Starting tcpdump to capture traffic...\n"
+log I "${BLUE}[2/5]${RESET} Starting tcpdump to capture traffic...\n"
 ${DC_EXEC} ft_malcolm tcpdump -i "${INTERFACE}" -n -l -A "tcp port ${TEST_PORT}" > /tmp/tcpdump_capture.txt 2>&1 &
 sleep 2
-
-# Step 3: Launch the MITM attack
-log I "${BLUE}[3/6]${RESET} Launching MITM attack...\n"
-${DC_EXEC} -d ft_malcolm bash -c "./a.out ${INTERFACE} ${TARGET_IP} ${TARGET_MAC} ${TRIGGERS_IP} ${TRIGGERS_MAC} > /tmp/mitm.log 2>&1"
 
 # Wait for ARP poisoning to take effect
 log I "${YELLOW}Waiting for ARP poisoning to take effect (5 seconds)...${RESET}\n"
 sleep 5
 
-# Step 4: Verify ARP poisoning
-log I "${BLUE}[4/6]${RESET} Verifying ARP poisoning...\n"
+# Step 3: Verify ARP poisoning
+log I "${BLUE}[3/5]${RESET} Verifying ARP poisoning...\n"
 
 log I "Target ARP table:\n"
 log I "$(${DC_EXEC} "${TARGET_ONE}" ip neigh | grep "${TRIGGERS_IP}")"
@@ -111,15 +105,15 @@ else
 fi
 echo ""
 
-# Step 5: Start nc listener
-log I "${BLUE}[5/6]${RESET} Starting netcat listener on target...\n"
+# Step 4: Start nc listener
+log I "${BLUE}[4/5]${RESET} Starting netcat listener on target...\n"
 ${DC_EXEC} -d "${TARGET_ONE}" sh -c "nc -lvp ${TEST_PORT} -q 0 > /tmp/nc_out.log 2>&1"
 sleep 1
 log I "${GREEN}[OK]${RESET} Listener started on ${TARGET_IP}:${TEST_PORT}\n"
 echo ""
 
-# Step 6: Send the test message
-log I "${BLUE}[6/6]${RESET} Sending test message...\n"
+# Step 5: Send the test message
+log I "${BLUE}[5/5]${RESET} Sending test message...\n"
 log I "Message: ${YELLOW}${SECRET_MESSAGE}${RESET}\n"
 
 ${DC_EXEC} -i "${TRIGGERS_ONE}" bash -c "echo \"${SECRET_MESSAGE}\" | nc ${TARGET_ONE} ${TEST_PORT} -q 0"
